@@ -1,0 +1,5 @@
+在路径E:\爬虫项目\zhanku>输入：
+scrapy crawl zhanku -a year=2014
+（注意：其中2014可以换成其他年份，比如2015，2016，如果没有输入年份，默认2016）
+爬去默认2016：
+scrapy crawl zhanku

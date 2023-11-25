@@ -101,7 +101,8 @@ MAX_PAGE = 500
 #     '创作习作':'7',
 #     '新锐潮流插画':'3',
 # }
-SUB_CATE_LIST=['2','3','7','292']
+# SUB_CATE_LIST=['2','3','7','292']
+SUB_CATE_LIST=['292','7']
 
 #保存数据
 MONGO_URI = 'localhost'
