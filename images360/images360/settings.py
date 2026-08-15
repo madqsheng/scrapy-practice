@@ -97,7 +97,10 @@ MYSQL_PORT = 3306
 MYSQL_USER = 'root'
 MYSQL_PASSWORD = '123456'
 
-IMAGES_STORE = './images'
+# 图片保存：统一落到项目根目录下的 resource/image360（不再相对运行目录）
+from pathlib import Path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+IMAGES_STORE = str(_REPO_ROOT / 'resource' / 'image360')
 ITEM_PIPELINES = {
     'images360.pipelines.ImagePipeline': 300,
     'images360.pipelines.MongoPipeline': 301,

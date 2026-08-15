@@ -4,7 +4,8 @@ import os
 import requests
 
 url = "https://courses.d2l.ai/zh-v2/"
-root_dir=r'C:/Users/admin/Desktop/动手学习深度学习'
+from pathlib import Path
+root_dir = str(Path(__file__).resolve().parent / 'resource' / 'd2l')
 
 # 创建 Firefox 浏览器选项
 firefox_options = Options()

@@ -137,8 +137,10 @@ RANDOMIZE_DOWNLOAD_DELAY = True  # 启用随机下载延迟
 # 设置日志级别
 # LOG_LEVEL = 'DEBUG'
 
-#文件保存
-FILES_STORE = 'E:\极客时间'
+# 文件保存：统一落到项目根目录下的 resource/<BOT_NAME>（不再写死绝对路径）
+from pathlib import Path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+FILES_STORE = str(_REPO_ROOT / 'resource' / BOT_NAME)
 ITEM_PIPELINES = {
     'jikeshijian.pipelines.CoursePipeline': 300,
     'jikeshijian.pipelines.ArticlePipeline': 301,

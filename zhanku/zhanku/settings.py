@@ -114,7 +114,10 @@ MYSQL_PORT = 3306
 MYSQL_USER = 'root'   
 MYSQL_PASSWORD = '123456'
 
-IMAGES_STORE = 'D:/卢艳/站酷爬虫图片'
+# 资源统一保存到项目根目录下的 resource/zhanku（不再写死旧电脑绝对路径）
+from pathlib import Path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+IMAGES_STORE = str(_REPO_ROOT / 'resource' / 'zhanku')
 ITEM_PIPELINES = {
     'zhanku.pipelines.ImagePipeline': 300,
     'zhanku.pipelines.CsvExportPipeline': 301,  # 请替换成实际的pipeline导入路径

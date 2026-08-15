@@ -18,6 +18,19 @@ class JkArticleSpider(scrapy.Spider):
     # 具体文章的内容，需要id
     article_url = "https://time.geekbang.org/serv/v1/article"
 
+    def __init__(self, limit=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # limit：只爬「我的课程」列表里的前 N 门；不传则爬全部。
+        # 实际课程数少于 limit 时不会报错，有多少爬多少。
+        if limit is not None:
+            try:
+                self.limit = int(limit)
+            except (TypeError, ValueError):
+                self.logger.warning("limit 参数无效（%r），将爬取全部课程", limit)
+                self.limit = None
+        else:
+            self.limit = None
+
     def start_requests(self):
         yield scrapy.Request(
             url=self.product_url,  # 获取课程
@@ -32,6 +45,9 @@ class JkArticleSpider(scrapy.Spider):
         course_item = CourseItem()
         json_response = json.loads(response.text)  # 反序列化
         courses = json_response['data']['products']
+        # 按 limit 截取前 N 门；实际课程数不足时切片自动截断，不报错
+        if self.limit is not None:
+            courses = courses[:self.limit]
         course_list=[]
         for course in courses:
             course_item['course_id'] = course['id']  # int
