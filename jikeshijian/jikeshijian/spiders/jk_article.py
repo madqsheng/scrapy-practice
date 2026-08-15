@@ -31,7 +31,8 @@ class JkArticleSpider(scrapy.Spider):
         else:
             self.limit = None
 
-    def start_requests(self):
+    async def start(self):
+        # Scrapy 2.13+ 用 async def start() 取代旧的 start_requests()
         yield scrapy.Request(
             url=self.product_url,  # 获取课程
             method='POST',

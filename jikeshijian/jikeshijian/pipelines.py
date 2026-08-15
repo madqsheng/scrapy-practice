@@ -88,6 +88,8 @@ class ArticlePipeline:
             article_content = md(item['article_content'],code_language_callback=code_language_callback)
             #保存文本
             file_path = os.path.join(self.file_dir,course_name,f'{article_title}.md')
+            # 先确保课程目录存在（不依赖 CoursePipeline 的建目录时序，避免并发下目录未建好就写文件）
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, 'w+', encoding='utf-8') as intro_file:
                 intro_file.write(article_content)
 
@@ -104,7 +106,7 @@ class ArticlePipeline:
                     with open(audio_file, 'wb') as audio_file_obj:
                         audio_file_obj.write(response.content)
                 else:
-                    self.logger.error(f"Failed to download audio from {audio_url}")
+                    self.logger.error(f"Failed to download audio from {item['article_audio_url']}")
                     
                 # return item #错误
         return item
