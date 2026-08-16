@@ -18,6 +18,9 @@ class JkArticleSpider(scrapy.Spider):
     # 具体文章的内容，需要id
     article_url = "https://time.geekbang.org/serv/v1/article"
 
+    # 文章评论区
+    comment_url = "https://time.geekbang.org/serv/v4/comment/list"
+
     def __init__(self, limit=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # limit：只爬「我的课程」列表里的前 N 门；不传则爬全部。
@@ -117,12 +120,36 @@ class JkArticleSpider(scrapy.Spider):
             )
 
     def parse_article(self, response):
-        article_item = ArticleItem()
-        article_item['course_id'] = response.meta['course_id']
-        article_item['course_name'] = response.meta['course_name']
-        article_item['article_id'] = response.meta['article_id']
-        article_item['article_title'] = response.meta['article_title']
+        meta = response.meta
         article = json.loads(response.text)['data']
-        article_item['article_content'] = article['article_content']
-        article_item['article_audio_url'] = article['audio_download_url']
+        meta['article_content'] = article['article_content']
+        meta['article_audio_url'] = article['audio_download_url']
+
+        # 正文拿到后继续请求评论区，最后把评论和正文一起交给 pipeline
+        comment_body = json.dumps({
+            "aid": meta['article_id'],
+            "prev": 0,
+            "sort": 0
+        })
+        Referer = 'https://time.geekbang.org/column/article/{}'.format(
+            meta['article_id'])
+        yield scrapy.Request(
+            url=self.comment_url,
+            method='POST',
+            headers={'Referer': Referer},
+            body=comment_body,
+            callback=self.parse_comments,
+            meta=meta
+        )
+
+    def parse_comments(self, response):
+        meta = response.meta
+        article_item = ArticleItem()
+        article_item['course_id'] = meta['course_id']
+        article_item['course_name'] = meta['course_name']
+        article_item['article_id'] = meta['article_id']
+        article_item['article_title'] = meta['article_title']
+        article_item['article_content'] = meta['article_content']
+        article_item['article_audio_url'] = meta['article_audio_url']
+        article_item['comments'] = json.loads(response.text)['data']
         yield article_item

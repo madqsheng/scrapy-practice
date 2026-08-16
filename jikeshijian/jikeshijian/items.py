@@ -20,3 +20,4 @@ class ArticleItem(scrapy.Item):
     article_audio_url = scrapy.Field()
     course_id = scrapy.Field()
     course_name = scrapy.Field()
+    comments = scrapy.Field()       # /serv/v4/comment/list 返回的完整评论数据

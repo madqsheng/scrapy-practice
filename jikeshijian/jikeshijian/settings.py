@@ -97,8 +97,8 @@ DOWNLOADER_MIDDLEWARES = {
     'jikeshijian.middlewares.CustomHeadersMiddleware': 301,
 }
 
-MY_COOKIE = 'GCID=172065f-b064e52-c77eac3-41158aa; GCESS=BgQEAI0nAAME8pqAagEIbT4UAAAAAAAJAQEKBAAAAAAFBAAAAAANAQEHBD01kJkMAQEIAQMGBMIB4UoLAgYAAgTymoBq'
-MY_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43'
+MY_COOKIE = 'LF_ID=b966f13-338265c-267cc96-d9c19c4; GCID=172065f-b064e52-c77eac3-41158aa; _ga=GA1.2.1362896939.1786813156; _gid=GA1.2.286620813.1786813156; _ga_JW698SFNND=GS2.2.s1786813156$o1$g1$t1786813162$j54$l0$h0; GRID=172065f-b064e52-c77eac3-41158aa; tfstk=gAD-n3DNtEYutGJXWTAmX_l0E_-0yImzM4o1Ky4lOq3x-2kurum3Aj3sWb2kTQldJr34x42S-2QKrq0LT3z3Ry3nAbxDIdmr4JyQJFvMIFtFql3LVWa7cHZgAut0NP88xE2BSFvDl5OPLJiH-1FiMma4vk_QN2abGrrNRJa7OZ1bfraQd265hiZzx_Z7d2iXDkzbRJwIR-tYYraQdJMnNH4fTy6KJYu_TDKEg96IHuFXiDzjk4K3v7UsVrIcmxpUwPi7k9TlHeSuJrk6oInqGbgu02p9kJuqO2ZKlZT3aDGxku3kWwznU0DLr0dWzmeLy4N-Mh1zDmD-vXNvVLiYezFih4per8hIzvFrwM-Zc8gq_PPWgErxEAVL7SQXPmmYP5hKrEWQrfnjk5DcoO2EuXgQvq_R4KHiBmjfSPEhNnKAT6P70axSDHJ6F7G_DPxJt65UiCZYSnKAT6P70oUMmACFTSA1.; GCESS=BgQEAI0nAAME8pqAagEIbT4UAAAAAAAJAQEKBAAAAAAFBAAAAAANAQEHBD01kJkMAQEIAQMGBMIB4UoLAgYAAgTymoBq; Hm_lvt_59c4ff31a9ee6263811b23eb921a5083=1786813113,1786820908; HMACCOUNT=B0F3D1E5EB6665B2; Hm_lvt_022f847c4e3acd44d4a2481d9187f1e6=1786813113,1786820908; gksskpitn=ee736b27-eab3-4cc3-b6bd-78cc2af8e136; _tea_utm_cache_20000743={%22utm_source%22:%22geektime_search%22%2C%22utm_medium%22:%22geektime_search%22%2C%22utm_campaign%22:%22geektime_search%22%2C%22utm_term%22:%22geektime_search%22%2C%22utm_content%22:%22geektime_search%22}; acw_tc=276ae9b017868250121635428e4e5b1a53ac1193315d474acd2261b134d1b9; _gat=1; __tea_cache_tokens_20000743={%22web_id%22:%227674303880103989765%22%2C%22user_unique_id%22:%221326701%22%2C%22timestamp%22:1786825122648%2C%22_type_%22:%22default%22}; Hm_lpvt_59c4ff31a9ee6263811b23eb921a5083=1786825123; Hm_lpvt_022f847c4e3acd44d4a2481d9187f1e6=1786825123; _ga_03JGDGP9Y3=GS2.2.s1786823238$o2$g1$t1786825122$j44$l0$h0; SERVERID=1fa1f330efedec1559b3abbcb6e30f50|1786825126|1786820908'
+MY_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
 MY_REFERER = 'https://time.geekbang.org/dashboard/course'
 
 
@@ -131,9 +131,12 @@ ARTICLE_DATA = {
     "is_freelyread": 'true'
 }
 
-DOWNLOAD_DELAY = 2  # 设置下载延迟为2秒
+DOWNLOAD_DELAY = 10  # 设置下载延迟为10秒（正文接口有限流，放慢避免触发 X-GEEK-WARN: rate limit）
 CONCURRENT_REQUESTS = 1  # 设置同时只有一个请求
-RANDOMIZE_DOWNLOAD_DELAY = True  # 启用随机下载延迟
+RANDOMIZE_DOWNLOAD_DELAY = True  # 启用随机下载延迟（实际间隔 5~15 秒）
+AUTOTHROTTLE_ENABLED = True  # 根据服务器延迟自动调速，遇到限流更温和
+AUTOTHROTTLE_START_DELAY = 10
+AUTOTHROTTLE_MAX_DELAY = 60
 # 设置日志级别
 # LOG_LEVEL = 'DEBUG'
 
@@ -145,3 +148,7 @@ ITEM_PIPELINES = {
     'jikeshijian.pipelines.CoursePipeline': 300,
     'jikeshijian.pipelines.ArticlePipeline': 301,
 }
+
+# MemoryUsage 扩展依赖 Unix 专属的 resource.getrusage()，Windows 上不可用会报错。
+# 禁用后对爬取无任何影响（仅不再打印内存占用）。
+MEMUSAGE_ENABLED = False

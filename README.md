@@ -55,7 +55,7 @@ scrapy-practice/
 |------|------|----------|--------------|----------|
 | `d2l_download.py` | 独立脚本（非 Scrapy） | courses.d2l.ai 课程页 | Selenium 无头浏览器 + requests 下载 | `resource/d2l` 本地文件夹 |
 | `images360` | Scrapy 工程 | image.so.com（360 图片） | 列表 JSON 接口翻页爬取 | 本地图片(`resource/image360`) + MongoDB + MySQL（三选/全开） |
-| `jikeshijian` | Scrapy 工程 | time.geekbang.org（极客时间） | 登录 Cookie + 三层 API 钻取（课程→文章列表→正文） | `resource/jikeshijian` 本地文件夹（含 HTML→MD 转换） |
+| `jikeshijian` | Scrapy 工程 | time.geekbang.org（极客时间） | 登录 Cookie + 三层 API 钻取（课程→文章列表→正文） | `resource/jikeshijian` 本地文件夹（正文为富文本 HTML，直接生成带排版的 HTML 阅读页 + 可选音频） |
 | `scrapyseleniumtest` | Scrapy 工程 | s.taobao.com（淘宝） | Selenium 下载中间件绕过 JS 渲染反爬 | MongoDB（仅解析，未落地文件） |
 | `zhanku` | Scrapy 工程 | zcool.com.cn（站酷） | 列表 JSON + 年份过滤 + 图片批量下载 | `resource/zhanku` 本地图片（按年/分类/阅读量分目录）+ CSV |
 
@@ -134,6 +134,7 @@ scrapy crawl zhanku -a year=2014   # 也可指定年份
 3. **硬编码 Cookie**：极客时间、淘宝的登录 Cookie 是 2023 年抓的，早已失效，需要重新登录抓包替换。
 4. **目标站点改版 / 升级反爬**：d2l 的旧版页面、极客时间 / 淘宝 / 站酷的接口和风控这几年都变过，原有的 XPath 和接口参数很可能已失效。
 5. **过时数据库写法**：`pipelines.py` 里 MongoDB 用 `db.insert(...)`（已废弃，应 `insert_one(...)`）。
+6. **极客时间正文接口有账号级限流**：`serv/v1/article`（文章正文）会按账号/IP 限额，触发时返回 `451` + 空 body + 响应头 `X-GEEK-WARN: rate limit`；而 `product` / `column/articles`（列表）接口不受影响。表现为「列表能拉、正文全挂」。这是服务端策略，**不是代码 / Cookie 问题**。缓解：`DOWNLOAD_DELAY` 调大 + 开启 `AUTOTHROTTLE`；触发后**先停手等冷却**（滚动窗口几十分钟~几小时，或当日额度次日重置），别连续轰，爬的时候也别在浏览器同时刷极客时间（共享额度）。
 
 ---
 
