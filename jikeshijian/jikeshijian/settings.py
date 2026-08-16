@@ -115,6 +115,31 @@ MY_PRODUCT_DATA = {
     'with_learn_count': 1
 }
 
+# 指定课程模式（可选）：只爬这里列出的课程。课名解析改用离线索引
+#   jikeshijian/course_index.json（由 jikeshijian/sync_course_index.py 生成、已提交仓库），
+#   爬虫运行时不再发网络查目录，直接按名→id 离线匹配，稳且不触发限流。
+# - 大部分课名会自动从索引匹配；少数「你写的名字 ≠ 目录规范标题」的课（如
+#   "Claude Code 工程化实战" → 真实 "Claude Code Skill入门实战课"）已在
+#   sync_course_index.py 的 EXTRA 里固化了 id，无需你手改这里的名字。
+# - 若某门课名在索引里确实没有（目录与 EXTRA 都搜不到），爬虫会 WARNING 并跳过；
+#   这种「VIP 可看但 product_list 目录翻不到」的课，把课程页 id 填到下面
+#   MY_COURSE_IDS 即可（或 -a course_ids="..." 临时指定）。
+# - 索引里的课程目录会随时间变化：cookie 有效时执行
+#   python jikeshijian/sync_course_index.py 可重新抓取刷新（约 270+ 门）。
+# - 为空列表时，回退到命令行的 -a limit= / 全部 模式；也可用 -a courses="A,B" 临时指定。
+# 优先级：-a courses  >  -a limit  >  MY_COURSES  >  全部。
+MY_COURSES = ["Harness Agent 脚手架实战课", "AI Agent 系统设计面试现场", 
+              "DeepSeek Harness 极简入门", "Claude Code 工程化实战",
+              "生产级 Agent 排雷实战", "AI Agent 智能体实战课", "MCP & A2A 前沿实战", 
+              "Agent 设计模式之美", "Claude Code 企业级全链路开发实战", "RAG 快速开发实战",
+              "LangChain 实战课","强化学习快速入门与实战"]
+
+# 直接指定课程 id（绕过名称解析）。用于「VIP 可看但 product_list 目录翻不到」的
+# 课程：从浏览器课程页 URL（.../column/intro/<id> 或 .../course/intro/<id>）拿到 id 填这里。
+# 命令行也可用 -a course_ids="101069801,100617601" 或 -a course_ids='[101069801]' 临时指定。
+MY_COURSE_IDS = []
+
+
 # 获取课程所有文章的请求表单
 COURSE_DATA = {
     "cid": "",

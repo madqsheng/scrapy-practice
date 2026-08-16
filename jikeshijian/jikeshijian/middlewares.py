@@ -123,7 +123,7 @@ class CustomHeadersMiddleware:
     def spider_opened(self, spider):
         spider.logger.info('CustomHeadersMiddleware: Spider opened: %s' % spider.name)
 
-    def process_request(self, request, spider):
+    def process_request(self, request):
         # 设置Cookie
         if self.cookies:
             cookie_dict = {cookie.split("=")[0]: cookie.split("=")[1] for cookie in self.cookies.split(";")}
@@ -135,7 +135,6 @@ class CustomHeadersMiddleware:
         
         # 设置User-Agent
         if self.user_agents:
-            print(self.user_agents)
             request.headers['User-Agent'] = self.user_agents
         
         # # 设置Referer

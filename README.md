@@ -101,7 +101,10 @@ scrapy crawl images
 cd jikeshijian
 scrapy crawl jk                  # 爬「我的课程」里的全部课程
 scrapy crawl jk -a limit=10      # 只爬列表里的前 10 门（实际不足 10 门也不报错）
+scrapy crawl jk -a courses="Harness Agent 脚手架实战课,AI Agent 系统设计面试现场"   # 只爬指定的课程（名称需与「我的课程」完全一致，且已购买）
 ```
+- 指定课程还有两种写法：课程名本身含逗号时用 JSON 数组 `-a courses='["A","B"]'`；或把列表写进 `settings.py` 的 `MY_COURSES = [...]`（命令行没传 `-a courses` 时回退到它）。
+- 优先级：`-a courses` > `MY_COURSES` > `-a limit` > 全部。匹配不到的课程名会打印告警（提示名称不一致或没买过）。
 - 需要登录态：把 `settings.py` 里的 `MY_COOKIE` 换成你自己的（**代码里的是 2023 年的，已过期**）。
 - 文件统一保存到项目根目录 `resource/jikeshijian`（相对路径，已不再写死绝对路径 `E:\极客时间`）。
 
