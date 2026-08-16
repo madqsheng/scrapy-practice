@@ -233,7 +233,7 @@ class JkArticleSpider(scrapy.Spider):
 
     @staticmethod
     def _load_course_index():
-        """载入离线课程索引 course_index.json，返回 name/title -> (id, title) 解析表。
+        """载入离线课程索引 course_index.json，返回 课程名 -> (id, 课程名) 解析表（课程名与 id 一一对应）。
         文件不存在或读取失败返回 None（调用方回退到运行时解析）。"""
         if not _INDEX_PATH.exists():
             return None
@@ -245,16 +245,9 @@ class JkArticleSpider(scrapy.Spider):
             logging.getLogger(__name__).warning("course_index.json 读取失败，回退运行时解析：%s", e)
             return None
         by_title = data.get('by_title') or {}
-        extra = data.get('extra') or []
         resolver = {}
         for t, i in by_title.items():
             resolver[str(t).strip()] = (i, str(t).strip())
-        for e in extra:
-            name = str(e.get('name') or '').strip()
-            tid = e.get('id')
-            title = str(e.get('title') or name)
-            if name and tid is not None:
-                resolver[name] = (tid, title)
         return resolver
 
     def _resolve_offline(self, wanted, resolver):

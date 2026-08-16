@@ -275,47 +275,5 @@
     "Terraform从0基础到上手项目 DevOps自动化运维": 100827001,
     "智能运维实战（AIOps）之日志数据挖掘": 100799901,
     "C语言精粹": 100787901
-  },
-  "extra": [
-    {
-      "name": "LangChain 实战课",
-      "id": 100617601,
-      "title": "LangChain实战课"
-    },
-    {
-      "name": "Claude Code 工程化实战",
-      "id": 101119601,
-      "title": "Claude Code Skill入门实战课"
-    },
-    {
-      "name": "RAG 快速开发实战",
-      "id": 100799801,
-      "title": "RAG前沿入门课"
-    },
-    {
-      "name": "AI Agent 系统设计面试现场",
-      "id": 101069801,
-      "title": "AI Agent入门第一课：零基础玩转智能体"
-    },
-    {
-      "name": "AI Agent 智能体实战课",
-      "id": 101069801,
-      "title": "AI Agent入门第一课：零基础玩转智能体"
-    },
-    {
-      "name": "Agent 设计模式之美",
-      "id": 100039001,
-      "title": "设计模式之美"
-    },
-    {
-      "name": "Harness Agent 脚手架实战课",
-      "id": 101170001,
-      "title": "Harness Agent 脚手架实战课"
-    },
-    {
-      "name": "Claude Code 企业级全链路开发实战",
-      "id": 101128701,
-      "title": "Claude Code 企业级全链路开发实战"
-    }
-  ]
+  }
 }
