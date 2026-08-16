@@ -122,34 +122,75 @@ class JkArticleSpider(scrapy.Spider):
     def parse_article(self, response):
         meta = response.meta
         article = json.loads(response.text)['data']
-        meta['article_content'] = article['article_content']
-        meta['article_audio_url'] = article['audio_download_url']
 
-        # 正文拿到后继续请求评论区，最后把评论和正文一起交给 pipeline
-        comment_body = json.dumps({
-            "aid": meta['article_id'],
-            "prev": 0,
-            "sort": 0
-        })
+        # 构建 item 草稿，正文先填好；评论区分「最新」(sort=0) 和「精选」(sort=1)
+        # 两次请求获取。采用链式（先最新后精选）+ errback 兜底，保证即使某个
+        # 评论请求失败（如 451 限流），正文也一定会落盘，不会整篇丢失。
+        item = ArticleItem()
+        item['course_id'] = meta['course_id']
+        item['course_name'] = meta['course_name']
+        item['article_id'] = meta['article_id']
+        item['article_title'] = meta['article_title']
+        item['article_content'] = article['article_content']
+        item['article_audio_url'] = article['audio_download_url']
+        item['comments'] = None
+        item['comments_essence'] = None
+
         Referer = 'https://time.geekbang.org/column/article/{}'.format(
             meta['article_id'])
+
+        # 先取「最新」（sort=0），成功后再取「精选」（sort=1）
         yield scrapy.Request(
             url=self.comment_url,
             method='POST',
             headers={'Referer': Referer},
-            body=comment_body,
+            body=json.dumps({"aid": meta['article_id'], "prev": 0, "sort": 0}),
             callback=self.parse_comments,
-            meta=meta
+            errback=self.parse_comments_err,
+            meta={'item': item, 'sort': 0, 'referer': Referer}
         )
 
     def parse_comments(self, response):
         meta = response.meta
-        article_item = ArticleItem()
-        article_item['course_id'] = meta['course_id']
-        article_item['course_name'] = meta['course_name']
-        article_item['article_id'] = meta['article_id']
-        article_item['article_title'] = meta['article_title']
-        article_item['article_content'] = meta['article_content']
-        article_item['article_audio_url'] = meta['article_audio_url']
-        article_item['comments'] = json.loads(response.text)['data']
-        yield article_item
+        item = meta['item']
+        sort = meta['sort']
+        data = json.loads(response.text)['data']
+        if sort == 0:
+            item['comments'] = data
+            # 接着请求「精选」（sort=1）
+            Referer = meta['referer']
+            yield scrapy.Request(
+                url=self.comment_url,
+                method='POST',
+                headers={'Referer': Referer},
+                body=json.dumps({"aid": item['article_id'], "prev": 0, "sort": 1}),
+                callback=self.parse_comments,
+                errback=self.parse_comments_err,
+                meta={'item': item, 'sort': 1, 'referer': Referer}
+            )
+        else:
+            item['comments_essence'] = data
+            yield item
+
+    def parse_comments_err(self, failure):
+        """评论请求失败（如 451 限流）兜底：缺失部分置空，仍保证正文落盘。"""
+        meta = failure.request.meta
+        item = meta['item']
+        sort = meta['sort']
+        empty = {'list': [], 'page': {'count': 0, 'more': False}}
+        if sort == 0:
+            item['comments'] = empty
+            # 最新失败也继续尝试精选，尽量多存
+            Referer = meta['referer']
+            yield scrapy.Request(
+                url=self.comment_url,
+                method='POST',
+                headers={'Referer': Referer},
+                body=json.dumps({"aid": item['article_id'], "prev": 0, "sort": 1}),
+                callback=self.parse_comments,
+                errback=self.parse_comments_err,
+                meta={'item': item, 'sort': 1, 'referer': Referer}
+            )
+        else:
+            item['comments_essence'] = empty
+            yield item

@@ -5,6 +5,7 @@
 
 
 import os
+import re
 import logging
 import html
 from datetime import datetime
@@ -186,13 +187,32 @@ __COMMENTS__
     var fig=document.createElement('figure'); fig.className='fig';
     img.parentNode.insertBefore(fig, img); fig.appendChild(img);
     var cap=img.getAttribute('title')||img.getAttribute('alt')||'';
-    if(cap){ var fc=document.createElement('figcaption'); fc.textContent=cap; fig.appendChild(fc); }
+    if(cap){
+      var fc=document.createElement('figcaption');
+      // 极客图注里用 <br> 分隔多行，这里转成真实换行显示
+      fc.textContent = cap.replace(/<br\\s*\\/?>/gi, '\n');
+      fc.style.whiteSpace = 'pre-line';
+      fig.appendChild(fc);
+    }
     img.addEventListener('click', function(){ openLightbox(img.getAttribute('src'), img.getAttribute('alt')||''); });
   }
   var pres=document.querySelectorAll('.content pre');
   for(var i=0;i<pres.length;i++) enhanceCode(pres[i]);
   var imgs=document.querySelectorAll('.content img');
   for(var j=0;j<imgs.length;j++) enhanceImg(imgs[j]);
+  // 评论区「最新 / 精选」切换
+  var cmtTabs = document.querySelectorAll('.comments-tabs .tab');
+  for(var t=0; t<cmtTabs.length; t++){
+    cmtTabs[t].addEventListener('click', function(){
+      for(var k=0; k<cmtTabs.length; k++) cmtTabs[k].classList.remove('active');
+      this.classList.add('active');
+      var which = this.getAttribute('data-tab');
+      var latest = document.getElementById('cmt-latest');
+      var essence = document.getElementById('cmt-essence');
+      if(latest) latest.style.display = (which==='latest') ? '' : 'none';
+      if(essence) essence.style.display = (which==='essence') ? '' : 'none';
+    });
+  }
 })();
 </script>
 </body>
@@ -219,88 +239,123 @@ def _ts_to_date(ts):
         return ''
 
 
+# 裸链接匹配：不含空白、< > 以及中文字符（URL 里的中文是 %XX 编码，不会是裸中文）
+_URL_RE = re.compile(r'https?://[^\s<>\u4e00-\u9fff]+')
+
+
+def _linkify(match):
+    """把匹配到的裸 URL 包成可点击的 <a>，并剥离结尾常见中英文标点。"""
+    url = match.group(0)
+    trail = ''
+    while url and url[-1] in '.,;:!?。，；：！？、）、】)':
+        trail = url[-1] + trail
+        url = url[:-1]
+    return '<a href="{}" target="_blank" rel="noopener">{}</a>{}'.format(url, url, trail)
+
+
 def _comment_text_to_html(text):
-    """评论内容转 HTML：先转义 HTML 字符，再把换行转成 <br>。"""
+    """评论内容转 HTML。
+
+    极客返回的评论内容里，/ ' " 等字符已被 HTML 实体化（如 &#47; &#39;），
+    若直接 html.escape() 会二次转义成 &amp;#47; 导致链接乱码。
+    因此先 unescape 还原真实字符，再 escape 防 XSS，最后换行转 <br>，
+    并顺手把裸链接转成可点击 <a>（贴近原网页评论区体验）。
+    """
     if text is None:
         return ''
-    text = html.escape(str(text))
-    # 极客时间接口里换行就是字面 \n（JSON 字符串），直接用换行符切分
+    text = html.unescape(str(text))   # &#47; -> / ， &#39; -> ' ， &quot; -> "
+    text = html.escape(text)          # 重新转义防注入（/ 不需要转义，保持不变）
+    text = _URL_RE.sub(_linkify, text)
+    # 极客接口里换行就是字面 \n（JSON 字符串），直接用换行符切分
     return '<br>'.join(text.splitlines())
 
 
-def _render_comments(comments_data):
-    """把 /serv/v4/comment/list 的 data 字段渲染成评论区 HTML。"""
-    if not comments_data:
-        return '<section class="comments-section"><div class="comment-empty">暂无评论</div></section>'
+def _render_comments(comments_data, comments_essence=None):
+    """把 /serv/v4/comment/list 的 data 渲染成评论区 HTML（含「最新/精选」切换）。"""
 
-    # comments_data 可能直接是 list，也可能是 {'list': [...], 'page': {...}}
-    comment_list = comments_data if isinstance(comments_data, list) else comments_data.get('list', [])
-    page = comments_data.get('page', {}) if isinstance(comments_data, dict) else {}
-    total = page.get('count', len(comment_list))
+    def _list_html(data, empty_hint):
+        if not data:
+            return '<div class="comment-empty">{}</div>'.format(empty_hint)
+        comment_list = data if isinstance(data, list) else data.get('list', [])
+        if not comment_list:
+            return '<div class="comment-empty">{}</div>'.format(empty_hint)
 
-    if not comment_list:
-        return '<section class="comments-section"><div class="comment-empty">暂无评论</div></section>'
+        items = []
+        for c in comment_list:
+            author = html.escape(c.get('user_name', '') or '')
+            avatar = html.escape(c.get('user_header', '') or '')
+            content = _comment_text_to_html(c.get('comment_content', ''))
+            date_str = _ts_to_date(c.get('comment_ctime'))
+            ip = html.escape(c.get('ip_address', '') or '')
+            likes = c.get('like_count', 0) or 0
+            discussions = c.get('discussion_count', 0) or 0
 
-    items = []
-    for c in comment_list:
-        author = html.escape(c.get('user_name', '') or '')
-        avatar = html.escape(c.get('user_header', '') or '')
-        content = _comment_text_to_html(c.get('comment_content', ''))
-        date_str = _ts_to_date(c.get('comment_ctime'))
-        ip = html.escape(c.get('ip_address', '') or '')
-        likes = c.get('like_count', 0) or 0
-        discussions = c.get('discussion_count', 0) or 0
+            # 作者回复（replies 里可能有多条，全部显示）
+            replies = c.get('replies') or []
+            reply_html = ''
+            for reply in replies:
+                reply_user = html.escape(reply.get('user_name', '作者回复'))
+                reply_content = _comment_text_to_html(reply.get('content', ''))
+                reply_html += (
+                    '<div class="comment-reply">'
+                    '<span class="comment-reply-label">{}:</span>'
+                    '{}'
+                    '</div>'
+                ).format(reply_user, reply_content)
 
-        # 作者回复（replies 里可能有多条，全部显示）
-        replies = c.get('replies') or []
-        reply_html = ''
-        for reply in replies:
-            reply_user = html.escape(reply.get('user_name', '作者回复'))
-            reply_content = _comment_text_to_html(reply.get('content', ''))
-            reply_html += (
-                f'<div class="comment-reply">'
-                f'<span class="comment-reply-label">{reply_user}:</span>'
-                f'{reply_content}'
-                f'</div>'
+            item_html = (
+                '<div class="comment-item">'
+                '  <img class="comment-avatar" src="{}" alt="{}" loading="lazy">'
+                '  <div class="comment-body">'
+                '    <div class="comment-author">{}</div>'
+                '    <div class="comment-text">{}</div>'
+                '    {}'
+                '    <div class="comment-meta">'
+                '      <span>{}</span>'
+                '      {}'
+                '      <span class="comment-actions">'
+                '        <span class="comment-action">{}{}</span>'
+                '        <span class="comment-action">{}{}</span>'
+                '      </span>'
+                '    </div>'
+                '  </div>'
+                '</div>'
+            ).format(
+                avatar, author, author, content, reply_html, date_str,
+                '<span class="sep">|</span><span>归属地：{}</span>'.format(ip) if ip else '',
+                _ICON_COMMENT, discussions, _ICON_LIKE, likes
             )
+            items.append(item_html)
+        return '\n'.join(items)
 
-        items.append(
-            '<div class="comment-item">'
-            f'  <img class="comment-avatar" src="{avatar}" alt="{author}" loading="lazy">'
-            '  <div class="comment-body">'
-            f'    <div class="comment-author">{author}</div>'
-            f'    <div class="comment-text">{content}</div>'
-            f'    {reply_html}'
-            '    <div class="comment-meta">'
-            f'      <span>{date_str}</span>'
-            f'      {"<span class=\"sep\">|</span><span>归属地：" + ip + "</span>" if ip else ""}'
-            '      <span class="comment-actions">'
-            f'        <span class="comment-action">{_ICON_COMMENT}<span>{discussions}</span></span>'
-            f'        <span class="comment-action">{_ICON_LIKE}<span>{likes}</span></span>'
-            '      </span>'
-            '    </div>'
-            '  </div>'
-            '</div>'
-        )
+    latest_html = _list_html(comments_data, '暂无评论')
+    essence_html = _list_html(comments_essence, '暂无精选评论')
 
-    tabs = (
-        '<div class="comments-tabs">'
-        '  <span class="tab active">最新</span>'
-        '  <span class="tab">精选</span>'
-        '</div>'
-    )
+    # 总数用「最新」列表的 count（找不到就用列表长度兜底）
+    page = comments_data.get('page', {}) if isinstance(comments_data, dict) else {}
+    total = page.get('count', 0)
+    if not total:
+        latest_list = (comments_data if isinstance(comments_data, list)
+                       else (comments_data or {}).get('list', []))
+        total = len(latest_list)
 
     return (
         '<section class="comments-section">'
         '  <div class="comments-header">'
-        f'    <div class="comments-title">全部留言({total})</div>'
-        f'    {tabs}'
+        '    <div class="comments-title">全部留言({})</div>'
+        '    <div class="comments-tabs">'
+        '      <span class="tab active" data-tab="latest">最新</span>'
+        '      <span class="tab" data-tab="essence">精选</span>'
+        '    </div>'
         '  </div>'
-        '  <div class="comment-list">'
-        + '\n'.join(items)
-        + '  </div>'
+        '  <div class="comment-list" id="cmt-latest">'
+        + latest_html +
+        '  </div>'
+        '  <div class="comment-list" id="cmt-essence" style="display:none;">'
+        + essence_html +
+        '  </div>'
         '</section>'
-    )
+    ).format(total)
 
 
 def _render_html(course_name, title, body_html, audio_rel_path=None, comments_html=''):
@@ -390,7 +445,7 @@ class ArticlePipeline:
                                  item['article_audio_url'], exc)
 
             # 文章正文本身就是富文本 HTML，直接包成阅读页（保留原网页的图片/代码排版）
-            comments_html = _render_comments(item.get('comments'))
+            comments_html = _render_comments(item.get('comments'), item.get('comments_essence'))
             file_path = os.path.join(self.file_dir, course_name, f'{article_title}.html')
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             html = _render_html(item['course_name'], item['article_title'],
