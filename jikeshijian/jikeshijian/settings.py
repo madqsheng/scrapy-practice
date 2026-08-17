@@ -127,9 +127,9 @@ MY_PRODUCT_DATA = {
 # 优先级：-a courses  >  -a limit  >  MY_COURSES  >  全部。
 MY_COURSES = ["Harness Agent 脚手架实战课", "AI Agent 系统设计面试现场", 
               "DeepSeek Harness 极简入门", "Claude Code 工程化实战",
-              "生产级 Agent 排雷实战", "AI Agent 智能体实战课", "MCP & A2A 前沿实战", 
-              "Agent 设计模式之美", "Claude Code 企业级全链路开发实战", "RAG 快速开发实战",
-              "LangChain 实战课","强化学习快速入门与实战"]
+              "生产级 Agent 排雷实战", "AI Agent智能体实战课", "MCP & A2A 前沿实战", 
+              "Agent 设计模式之美", "Claude Code 企业级全链路开发实战", "RAG快速开发实战",
+              "LangChain实战课","强化学习快速入门与实战"]
 
 # 直接指定课程 id（绕过名称解析）。用于「VIP 可看但 product_list 目录翻不到」的
 # 课程：从浏览器课程页 URL（.../column/intro/<id> 或 .../course/intro/<id>）拿到 id 填这里。
