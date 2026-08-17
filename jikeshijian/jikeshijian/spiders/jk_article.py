@@ -1,14 +1,17 @@
 import os
 import scrapy
 import json
+import time
+import asyncio
 from pathlib import Path
 
 from jikeshijian.items import ArticleItem, CourseItem
 # 复用 pipeline 的文件名安全化规则，保证「跳过判断」与「落盘命名」完全一致，不会比错文件。
 from jikeshijian.pipelines import _safe_filename
 
-# 离线课程索引（由 sync_course_index.py 生成，提交进仓库）。优先用它离线解析课名，
-# 不再依赖运行时接口；索引缺失时才回退到 learn/product + product_list 运行时解析。
+# 离线课程索引（由第四种模式 `scrapy crawl jk -a rebuild_index=1` 重建，写入本文件同级
+# course_index.json）。优先用它离线解析课名，不再依赖运行时接口；索引缺失时才回退到
+# learn/product + product_list 运行时解析。
 _INDEX_PATH = Path(__file__).resolve().parent.parent / 'course_index.json'
 
 
@@ -32,9 +35,15 @@ class JkArticleSpider(scrapy.Spider):
     # 全站课程目录（含 VIP 可访问但未单买的课程），用于按名解析课程 id
     product_list_url = "https://time.geekbang.org/serv/v4/pvip/product_list"
 
-    def __init__(self, limit=None, courses=None, course_ids=None, force=None, *args, **kwargs):
+    def __init__(self, limit=None, courses=None, course_ids=None, force=None, rebuild_index=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._products = []  # 跨页累加「我的课程」，最后统一筛选
+
+        # rebuild_index：第四种模式 —— 重建离线课程索引 course_index.json。
+        #   触发：scrapy crawl jk -a rebuild_index=1
+        #   复用 settings.MY_COOKIE（与爬虫同源）+ cookie 中间件 + 代理，无需独立脚本。
+        self.rebuild_index = str(rebuild_index or '').strip() in ('1', 'true', 'True', 'yes')
+        self.rebuild_delay = 3  # 重建模式每页之间的节流间隔（秒），防 452 限流
 
         # force：强制全量重爬开关（-a force=1）。默认 False（增量模式：本地已存的
         # 文章 html 自动跳过，只补缺失/新增）。设 True 时忽略本地已存、全部重新抓取。
@@ -131,6 +140,10 @@ class JkArticleSpider(scrapy.Spider):
 
     async def start(self):
         # Scrapy 2.13+ 用 async def start() 取代旧的 start_requests()
+        # 第四种模式：重建离线索引（优先于其它模式）
+        if self.rebuild_index:
+            yield self._start_rebuild_index()
+            return
         # 构造「我的课程」请求体。指定课程模式下去掉 type 过滤，否则非专栏课程
         # （p29/q/p35/c3 等）会被漏掉，导致按名匹配不到。
         # 离线课名解析放在 _resolve_courses（同步回调）里做，这里只负责拿到课程列表。
@@ -172,6 +185,92 @@ class JkArticleSpider(scrapy.Spider):
 
         # —— 所有课程收集完毕，开始解析 ——
         yield from self._resolve_courses()
+
+    # ===== 第四种模式：重建离线课程索引 course_index.json =====
+    # 复用 scrapy 的 cookie 中间件（MY_COOKIE）+ 代理，无需独立脚本。
+    # 分页法：product_type=0, pvip=0, with_articles=false, size=20, prev 页索引(0,1,2,...)
+    #   —— 这是浏览器真实规律（prev 是页索引，不是数量偏移）。边存，带节流防限流。
+    def _start_rebuild_index(self):
+        self._idx_by_title = {}
+        self._idx_prev = 0
+        self._idx_consec_empty = 0
+        self._idx_pages = 0
+        self.logger.info(
+            "【重建索引】模式启动：product_type=0, pvip=0, size=20, prev 页索引步进；"
+            "目标写入 %s", _INDEX_PATH
+        )
+        return self._make_rebuild_request(0)
+
+    def _make_rebuild_request(self, prev):
+        body = {
+            "tag_ids": [], "product_form": 0, "product_type": 0, "pvip": 0,
+            "prev": prev, "size": 20, "sort": 8, "with_articles": False,
+        }
+        return scrapy.Request(
+            url=self.product_list_url,
+            method='POST',
+            headers={
+                'Referer': 'https://time.geekbang.org/dashboard/course',
+                'Origin': 'https://time.geekbang.org',
+                'Accept': 'application/json',
+            },
+            body=json.dumps(body),
+            callback=self.parse_rebuild_index,
+            errback=self._rebuild_errback,
+        )
+
+    async def parse_rebuild_index(self, response):
+        try:
+            payload = (json.loads(response.text) or {}).get('data') or {}
+        except Exception as e:
+            self.logger.error("【重建索引】响应解析失败：%s", e)
+            return
+        products = payload.get('products', []) or []
+        new = 0
+        for p in products:
+            tid = p.get('id')
+            ttitle = p.get('title')
+            if tid is None or not ttitle:
+                continue
+            key = str(ttitle).strip()
+            if key not in self._idx_by_title:
+                self._idx_by_title[key] = tid
+                new += 1
+        self._idx_pages += 1
+        more = (payload.get('page') or {}).get('more')
+        self.logger.info(
+            "【重建索引】prev=%d：本页 %d 门，新增 %d，累计 %d，more=%s",
+            self._idx_prev, len(products), new, len(self._idx_by_title), more,
+        )
+        self._write_index()
+
+        # 停止条件：服务器说没下一页 / 连续 3 页无新增 / 保险上限
+        if new == 0:
+            self._idx_consec_empty += 1
+        else:
+            self._idx_consec_empty = 0
+        if more is False or self._idx_consec_empty >= 3 or self._idx_prev >= 60:
+            self.logger.info(
+                "【重建索引】停止翻页（more=%s, 连续空=%d, prev=%d）",
+                more, self._idx_consec_empty, self._idx_prev,
+            )
+            return
+        self._idx_prev += 1
+        await asyncio.sleep(self.rebuild_delay)
+        yield self._make_rebuild_request(self._idx_prev)
+
+    def _rebuild_errback(self, failure):
+        self.logger.error("【重建索引】请求失败，停止：%s", failure.value)
+        self._write_index()
+
+    def _write_index(self):
+        data = {
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total": len(self._idx_by_title),
+            "by_title": self._idx_by_title,
+        }
+        with open(_INDEX_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _get_wanted(self):
         """返回指定课程名列表；无指定则返回 None（表示走 全部/limit 模式）。
@@ -507,6 +606,12 @@ class JkArticleSpider(scrapy.Spider):
 
     def closed(self, reason):
         """爬虫结束时打印增量汇总，让你一眼确认「续上了」还是「全量重爬了」。"""
+        if self.rebuild_index:
+            self.logger.info(
+                "【重建索引】完成：共写入 %d 门课程名↔id 映射到 %s",
+                len(getattr(self, '_idx_by_title', {})), _INDEX_PATH,
+            )
+            return
         mode = "强制全量重爬" if self.force else "增量（跳过已存）"
         self.logger.info(
             "【增量汇总】模式=%s | 本次新抓 %d 篇 | 跳过已存 %d 篇",

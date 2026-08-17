@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>极客时间爬虫 jk · 使用说明</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1f2329; --sub:#5b6168;
+    --line:#e5e7eb; --brand:#1769ff; --brand-soft:#e8f0ff;
+    --green:#18a058; --green-soft:#e7f6ee; --amber:#d98b1f; --amber-soft:#fdf3e3;
+    --purple:#7c3aed; --purple-soft:#f1ebfd; --red:#e5484d; --red-soft:#fdecec;
+    --code-bg:#f3f4f6;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.7;font-size:15px}
+  .layout{display:flex;min-height:100vh}
+  /* 侧边 TOC */
+  nav{position:sticky;top:0;align-self:flex-start;height:100vh;width:248px;flex:none;
+    background:var(--panel);border-right:1px solid var(--line);padding:22px 16px;overflow:auto}
+  nav h2{font-size:13px;letter-spacing:.08em;color:var(--sub);margin:0 0 12px;text-transform:uppercase}
+  nav a{display:block;color:var(--sub);text-decoration:none;padding:7px 10px;border-radius:8px;font-size:13.5px}
+  nav a:hover{background:var(--brand-soft);color:var(--brand)}
+  nav a.sub{padding-left:24px;font-size:13px;color:#8a9099}
+  nav .ver{margin-top:18px;font-size:11px;color:#aab;padding:0 10px}
+  main{flex:1;max-width:920px;margin:0 auto;padding:40px 48px 80px}
+  h1{font-size:28px;margin:0 0 6px}
+  .lead{color:var(--sub);margin:0 0 26px}
+  h2{font-size:21px;margin:40px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h3{font-size:17px;margin:26px 0 10px}
+  p{margin:10px 0}
+  code{background:var(--code-bg);padding:2px 6px;border-radius:5px;font-family:"SFMono-Regular",Consolas,monospace;font-size:13px;color:#c0252b}
+  pre{background:#0f1115;color:#e6edf3;padding:14px 16px;border-radius:10px;overflow:auto;font-size:13px;line-height:1.55}
+  pre code{background:none;color:inherit;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--brand-soft);color:var(--brand);font-weight:600}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0;
+    box-shadow:0 1px 3px rgba(20,30,50,.04)}
+  .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:20px;margin-right:8px}
+  .t1{background:var(--brand-soft);color:var(--brand)}
+  .t2{background:var(--green-soft);color:var(--green)}
+  .t3{background:var(--amber-soft);color:var(--amber)}
+  .t4{background:var(--purple-soft);color:var(--purple)}
+  .muted{color:var(--sub);font-size:13.5px}
+  .note{border-left:4px solid var(--amber);background:var(--amber-soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13.5px}
+  .ok{border-left:4px solid var(--green);background:var(--green-soft)}
+  .svgwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0;text-align:center}
+  .svgwrap svg{max-width:100%;height:auto}
+  .flow-cap{color:var(--sub);font-size:12.5px;margin-top:6px}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:5px 0}
+  .endpoint{font-family:Consolas,monospace;font-size:12.5px;color:#0b69c7;background:#eef5ff;padding:1px 6px;border-radius:5px}
+  .footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px}
+  .kbd{display:inline-block;background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 8px;font-family:monospace;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <h2>目录</h2>
+  <a href="#overview">总览</a>
+  <a href="#prepare">运行前准备</a>
+  <a href="#cmds">四种模式命令</a>
+  <a class="sub" href="#cmd-all">① 全量</a>
+  <a class="sub" href="#cmd-spec">② 指定课程</a>
+  <a class="sub" href="#cmd-limit">③ 数量</a>
+  <a class="sub" href="#cmd-rebuild">④ 重建索引</a>
+  <a href="#chains">四种模式请求链路</a>
+  <a class="sub" href="#chain-all">① 全量链路</a>
+  <a class="sub" href="#chain-spec">② 指定课程链路</a>
+  <a class="sub" href="#chain-limit">③ 数量链路</a>
+  <a class="sub" href="#chain-rebuild">④ 重建索引链路</a>
+  <a class="sub" href="#chain-common">通用内容爬取链路</a>
+  <a href="#incr">增量 / 续爬</a>
+  <a href="#faq">排查表</a>
+  <div class="ver">jk spider · 离线索引 534 门<br>最后更新见文件实际内容</div>
+</nav>
+
+<main>
+  <h1>极客时间爬虫 jk · 使用说明</h1>
+  <p class="lead">一份可长期复用的上手文档。覆盖四种模式的使用命令、各自独立的请求链路（含流程图），以及增量续爬与排查要点。</p>
+
+  <!-- ============ 总览 ============ -->
+  <h2 id="overview">一、总览</h2>
+  <div class="card">
+    <p style="margin-top:0"><b>项目</b>：<code>jikeshijian/</code> 是一个 Scrapy 项目，蜘蛛名为 <code>jk</code>，用来把极客时间课程的<b>文章正文 + 评论</b>按课程归档成 HTML 落到本地。</p>
+    <p><b>四种模式</b>（同一个蜘蛛，靠参数 / 配置切换）：</p>
+    <table>
+      <tr><th>模式</th><th>触发方式</th><th>做什么</th></tr>
+      <tr><td><span class="tag t1">① 全量</span></td><td><code>MY_COURSES=[]</code><br>或 <code>scrapy crawl jk</code></td><td>爬「我的课程」里<b>全部</b>已买课程</td></tr>
+      <tr><td><span class="tag t2">② 指定课程</span></td><td><code>MY_COURSES</code> 或 <code>-a courses=</code> / <code>-a course_ids=</code></td><td>只爬你点名的几门课（课名<b>离线</b>解析成 id）</td></tr>
+      <tr><td><span class="tag t3">③ 数量</span></td><td><code>-a limit=N</code></td><td>爬「我的课程」里<b>前 N 门</b></td></tr>
+      <tr><td><span class="tag t4">④ 重建索引</span></td><td><code>-a rebuild_index=1</code></td><td>重新抓取课程目录，<b>从零重写</b> <code>course_index.json</code></td></tr>
+    </table>
+    <p class="muted" style="margin-bottom:0"><b>优先级</b>：<code>-a courses</code> &gt; <code>-a limit</code> &gt; <code>MY_COURSES</code> &gt; 全部。辅助：<code>-a course_ids=</code>（直接给 id）、<code>-a force=1</code>（强制重爬）。</p>
+  </div>
+
+  <!-- ============ 准备 ============ -->
+  <h2 id="prepare">二、运行前准备</h2>
+  <ul>
+    <li><b>Python</b>：用受管运行时（不要裸 <code>python</code>）<br>
+      <code>C:/Users/admin/.workbuddy/binaries/python/versions/3.13.12/python.exe</code></li>
+    <li><b>Cookie</b>：编辑 <code>jikeshijian/jikeshijian/settings.py</code> 里的 <code>MY_COOKIE</code>，整串粘贴新 cookie。爬虫与重建索引<b>共用这一处</b>。</li>
+    <li><b>代理</b>：翻页请求走系统/环境变量里的代理（默认 <code>127.0.0.1:7897</code>）。爬之前确认代理开着，否则请求会因区域被拦。</li>
+    <li><b>节流</b>：默认每门课程之间 <code>SLEEP_BETWEEN=2s</code>；重建索引模式每页 <code>3s</code>。不要在代理不稳时拉高并发。</li>
+    <li><b>落盘位置</b>：<code>jikeshijian/resource/jikeshijian/&lt;课程名&gt;/&lt;文章标题&gt;.html</code></li>
+  </ul>
+
+  <!-- ============ 命令 ============ -->
+  <h2 id="cmds">三、四种模式命令（简化版）</h2>
+
+  <h3 id="cmd-all">① 全量</h3>
+  <pre><code>scrapy crawl jk</code></pre>
+  <p class="muted">前提：<code>settings.py</code> 里 <code>MY_COURSES = []</code>。爬你购买的全部课程，不看索引。</p>
+
+  <h3 id="cmd-spec">② 指定课程</h3>
+  <pre><code># 方式 A：改配置后跑
+#   MY_COURSES = ["生产级 Agent 排雷实战", "DeepSeek Harness 极简入门"]
+scrapy crawl jk
+
+# 方式 B：命令行临时指定课名
+scrapy crawl jk -a courses="生产级 Agent 排雷实战,DeepSeek Harness 极简入门"
+
+# 方式 C：直接给课程 id（绕过课名解析）
+scrapy crawl jk -a course_ids="101170001,101128701"</code></pre>
+  <p class="muted">A/B 走「课名 → 离线索引 id」解析；C 直接用 id。</p>
+
+  <h3 id="cmd-limit">③ 数量</h3>
+  <pre><code>scrapy crawl jk -a limit=3</code></pre>
+  <p class="muted">爬「我的课程」里前 3 门（顺序由 learn/product 返回决定）。</p>
+
+  <h3 id="cmd-rebuild">④ 重建索引</h3>
+  <pre><code>scrapy crawl jk -a rebuild_index=1</code></pre>
+  <p class="muted">从零重写 <code>course_index.json</code>。跑之前先更新 <code>MY_COOKIE</code>。</p>
+
+  <div class="note">所有模式都可在末尾追加 <code>-a force=1</code> 强制全量重爬（忽略本地已存 HTML 的增量跳过）。</div>
+
+  <!-- ============ 链路 ============ -->
+  <h2 id="chains">四、四种模式请求链路（详细 + 图示）</h2>
+  <p class="muted">下面四种模式<b>分开</b>画清楚：每个模式先发哪个请求、做了什么、下一个请求又做什么，直到最后落盘。模式 ①/②/③ 在「拿到课程 id 之后」共用同一条「内容爬取链路」（见末尾）。</p>
+
+  <!-- 模式1 -->
+  <h3 id="chain-all"><span class="tag t1">① 全量</span> 请求链路</h3>
+  <div class="svgwrap">
+    <svg viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#1769ff"/></marker>
+      </defs>
+      <!-- nodes -->
+      <rect x="20" y="20" width="150" height="48" rx="9" fill="#e8f0ff" stroke="#1769ff"/>
+      <text x="95" y="42" font-size="13" font-weight="700" fill="#1769ff" text-anchor="middle">start()</text>
+      <text x="95" y="59" font-size="11" fill="#555" text-anchor="middle">MY_COURSES=[]</text>
+
+      <rect x="20" y="100" width="220" height="56" rx="9" fill="#fff" stroke="#1769ff"/>
+      <text x="130" y="122" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">① POST serv/v3/learn/product</text>
+      <text x="130" y="140" font-size="11" fill="#555" text-anchor="middle">翻页收齐「我的课程」</text>
+
+      <rect x="20" y="184" width="220" height="56" rx="9" fill="#fff" stroke="#1769ff"/>
+      <text x="130" y="206" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">①' parse_product 累加</text>
+      <text x="130" y="224" font-size="11" fill="#555" text-anchor="middle">多页合并 → 课程列表</text>
+
+      <rect x="20" y="268" width="220" height="60" rx="9" fill="#e7f6ee" stroke="#18a058"/>
+      <text x="130" y="290" font-size="12.5" font-weight="700" fill="#18a058" text-anchor="middle">wanted = 全部课程</text>
+      <text x="130" y="308" font-size="11" fill="#555" text-anchor="middle">无过滤，全部进入</text>
+
+      <rect x="300" y="268" width="360" height="60" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="480" y="288" font-size="12" font-weight="700" fill="#7c3aed" text-anchor="middle">通用内容爬取链路（下一节）</text>
+      <text x="480" y="306" font-size="11" fill="#555" text-anchor="middle">column/articles → article + comment → 落盘</text>
+
+      <!-- arrows -->
+      <line x1="95" y1="68" x2="95" y2="98" stroke="#1769ff" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="130" y1="156" x2="130" y2="182" stroke="#1769ff" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="130" y1="240" x2="130" y2="266" stroke="#1769ff" stroke-width="2" marker-end="url(#ar)"/>
+      <line x1="240" y1="298" x2="298" y2="298" stroke="#7c3aed" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="270" y="290" font-size="10.5" fill="#7c3aed" text-anchor="middle">每门</text>
+    </svg>
+    <div class="flow-cap">模式①：只看「我的课程」，不碰离线索引、不查 product_list 目录。</div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>逐请求说明</b></p>
+    <ul>
+      <li><b>① <span class="endpoint">POST serv/v3/learn/product</span></b>：负载 <code>{"data":{"ctype":1,"page":1,...}}</code>。返回你账号下已购/可看课程。响应分页，靠 <code>page_count</code> 翻到底。</li>
+      <li><b>①' parse_product</b>：把每一页的课程塞进 <code>self._products</code> 跨页累加，直到最后一页。</li>
+      <li><b>_finalize → _get_wanted</b>：因 <code>MY_COURSES=[]</code> 且无 <code>courses</code>/<code>limit</code>，<b>wanted = 全部课程</b>，直接进内容爬取。</li>
+      <li>之后走「通用内容爬取链路」（第四节末尾）。</li>
+    </ul>
+  </div>
+
+  <!-- 模式2 -->
+  <h3 id="chain-spec"><span class="tag t2">② 指定课程</span> 请求链路</h3>
+  <div class="svgwrap">
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#18a058"/></marker>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e5484d"/></marker>
+      </defs>
+      <rect x="20" y="16" width="160" height="46" rx="9" fill="#e7f6ee" stroke="#18a058"/>
+      <text x="100" y="38" font-size="13" font-weight="700" fill="#18a058" text-anchor="middle">start()</text>
+      <text x="100" y="54" font-size="10.5" fill="#555" text-anchor="middle">有 MY_COURSES/courses</text>
+
+      <rect x="20" y="92" width="220" height="56" rx="9" fill="#fff" stroke="#18a058"/>
+      <text x="130" y="114" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">① POST serv/v3/learn/product</text>
+      <text x="130" y="132" font-size="11" fill="#555" text-anchor="middle">翻页收齐「我的课程」</text>
+
+      <rect x="20" y="176" width="220" height="56" rx="9" fill="#fff" stroke="#18a058"/>
+      <text x="130" y="198" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">①' parse_product 累加</text>
+      <text x="130" y="216" font-size="11" fill="#555" text-anchor="middle">得到我的课程列表</text>
+
+      <rect x="20" y="260" width="240" height="74" rx="9" fill="#f1ebfd" stroke="#7c3aed"/>
+      <text x="140" y="282" font-size="12.5" font-weight="700" fill="#7c3aed" text-anchor="middle">② 离线索引解析课名→id</text>
+      <text x="140" y="300" font-size="11" fill="#555" text-anchor="middle">读 course_index.json (by_title)</text>
+      <text x="140" y="318" font-size="11" fill="#555" text-anchor="middle">课名匹配 → 课程 id</text>
+
+      <rect x="300" y="278" width="200" height="56" rx="9" fill="#fdf3e3" stroke="#d98b1f"/>
+      <text x="400" y="298" font-size="11.5" font-weight="700" fill="#d98b1f" text-anchor="middle">③ 缺失→回退 product_list</text>
+      <text x="400" y="316" font-size="10.5" fill="#555" text-anchor="middle">POST pvip/product_list 搜</text>
+
+      <rect x="540" y="278" width="120" height="56" rx="9" fill="#fdecec" stroke="#e5484d"/>
+      <text x="600" y="298" font-size="11.5" font-weight="700" fill="#e5484d" text-anchor="middle">搜不到</text>
+      <text x="600" y="316" font-size="10.5" fill="#555" text-anchor="middle">WARNING+跳过</text>
+
+      <rect x="20" y="350" width="240" height="52" rx="9" fill="#e7f6ee" stroke="#18a058"/>
+      <text x="140" y="370" font-size="12.5" font-weight="700" fill="#18a058" text-anchor="middle">wanted = 命中的课</text>
+      <text x="140" y="388" font-size="11" fill="#555" text-anchor="middle">仅点名的几门</text>
+
+      <rect x="300" y="350" width="360" height="52" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="480" y="370" font-size="12" font-weight="700" fill="#7c3aed" text-anchor="middle">通用内容爬取链路</text>
+      <text x="480" y="388" font-size="11" fill="#555" text-anchor="middle">column/articles → article + comment → 落盘</text>
+
+      <line x1="100" y1="62" x2="100" y2="90" stroke="#18a058" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="130" y1="148" x2="130" y2="174" stroke="#18a058" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="140" y1="232" x2="140" y2="258" stroke="#18a058" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="260" y1="297" x2="298" y2="297" stroke="#d98b1f" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="500" y1="306" x2="538" y2="306" stroke="#e5484d" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="140" y1="334" x2="140" y2="348" stroke="#18a058" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="260" y1="376" x2="298" y2="376" stroke="#7c3aed" stroke-width="2" marker-end="url(#ar2)"/>
+    </svg>
+    <div class="flow-cap">模式②：先收齐「我的课程」，再用离线索引把课名解析成 id；索引里没有才回退查目录，再没有就跳过。</div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>逐请求说明</b></p>
+    <ul>
+      <li><b>① <span class="endpoint">POST serv/v3/learn/product</span></b>：同模式①，先翻页收齐「我的课程」列表（这一步是为了后面按 id 取文章，也作为索引缺失时的备选）。</li>
+      <li><b>② 离线索引解析</b>：读 <code>course_index.json</code> 的 <code>by_title</code>（当前约 534 门），把命令行 / <code>MY_COURSES</code> 里的课名做<b>精确匹配</b>得到课程 id。<b>不发任何网络查目录请求</b>，稳且不触发限流。<code>-a course_ids=</code> 给的 id 直接进 wanted，不查索引。</li>
+      <li><b>③ 缺失回退</b>：若某课名在索引里查不到，才发 <span class="endpoint">POST serv/v4/pvip/product_list</span> 在目录里搜索一次做补救。</li>
+      <li><b>搜不到</b>：索引 + 目录都找不到 → 打印 <code>WARNING</code> 并跳过该课（不会中断整个任务）。补救办法：把课程页 id 填进 <code>MY_COURSE_IDS</code> 或用 <code>-a course_ids=</code>。</li>
+      <li>命中后走「通用内容爬取链路」。</li>
+    </ul>
+    <div class="note" style="margin-bottom:0">索引只覆盖 <code>product_type=0 + pvip=0</code>（约 534 门）。其它类型 / pvip=1 / 个别 VIP 新课不在里面，指定模式下会跳过——这是预期，不是 bug。</div>
+  </div>
+
+  <!-- 模式3 -->
+  <h3 id="chain-limit"><span class="tag t3">③ 数量</span> 请求链路</h3>
+  <div class="svgwrap">
+    <svg viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#d98b1f"/></marker>
+      </defs>
+      <rect x="20" y="20" width="150" height="46" rx="9" fill="#fdf3e3" stroke="#d98b1f"/>
+      <text x="95" y="42" font-size="13" font-weight="700" fill="#d98b1f" text-anchor="middle">start()</text>
+      <text x="95" y="57" font-size="10.5" fill="#555" text-anchor="middle">-a limit=N</text>
+
+      <rect x="20" y="96" width="220" height="56" rx="9" fill="#fff" stroke="#d98b1f"/>
+      <text x="130" y="118" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">① POST serv/v3/learn/product</text>
+      <text x="130" y="136" font-size="11" fill="#555" text-anchor="middle">翻页收齐「我的课程」</text>
+
+      <rect x="20" y="180" width="220" height="56" rx="9" fill="#fff" stroke="#d98b1f"/>
+      <text x="130" y="202" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">①' parse_product 累加</text>
+      <text x="130" y="220" font-size="11" fill="#555" text-anchor="middle">得到我的课程列表</text>
+
+      <rect x="20" y="264" width="240" height="60" rx="9" fill="#fdf3e3" stroke="#d98b1f"/>
+      <text x="140" y="286" font-size="12.5" font-weight="700" fill="#d98b1f" text-anchor="middle">wanted = 前 N 门</text>
+      <text x="140" y="304" font-size="11" fill="#555" text-anchor="middle">按列表顺序截断</text>
+
+      <rect x="300" y="264" width="360" height="60" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="480" y="284" font-size="12" font-weight="700" fill="#7c3aed" text-anchor="middle">通用内容爬取链路</text>
+      <text x="480" y="302" font-size="11" fill="#555" text-anchor="middle">column/articles → article + comment → 落盘</text>
+
+      <line x1="95" y1="66" x2="95" y2="94" stroke="#d98b1f" stroke-width="2" marker-end="url(#ar3)"/>
+      <line x1="130" y1="152" x2="130" y2="178" stroke="#d98b1f" stroke-width="2" marker-end="url(#ar3)"/>
+      <line x1="140" y1="236" x2="140" y2="262" stroke="#d98b1f" stroke-width="2" marker-end="url(#ar3)"/>
+      <line x1="260" y1="294" x2="298" y2="294" stroke="#7c3aed" stroke-width="2" marker-end="url(#ar3)"/>
+    </svg>
+    <div class="flow-cap">模式③：等价于「先全量收齐，再只取前 N 门」，前面部分和模式①完全一致。</div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>逐请求说明</b></p>
+    <ul>
+      <li><b>① <span class="endpoint">POST serv/v3/learn/product</span></b>：同模式①，翻页收齐全部「我的课程」。</li>
+      <li><b>①' parse_product</b>：跨页累加。</li>
+      <li><b>_get_wanted 截断</b>：wanted = 课程列表的<b>前 N 门</b>。N 来自 <code>-a limit=N</code>。</li>
+      <li>之后走「通用内容爬取链路」。</li>
+    </ul>
+  </div>
+
+  <!-- 模式4 -->
+  <h3 id="chain-rebuild"><span class="tag t4">④ 重建索引</span> 请求链路</h3>
+  <div class="svgwrap">
+    <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="ar4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7c3aed"/></marker>
+        <marker id="ar4b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#1769ff"/></marker>
+      </defs>
+      <rect x="20" y="16" width="170" height="46" rx="9" fill="#f1ebfd" stroke="#7c3aed"/>
+      <text x="105" y="38" font-size="13" font-weight="700" fill="#7c3aed" text-anchor="middle">start()</text>
+      <text x="105" y="53" font-size="10.5" fill="#555" text-anchor="middle">-a rebuild_index=1</text>
+
+      <rect x="20" y="92" width="280" height="62" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="160" y="114" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">① POST serv/v4/pvip/product_list</text>
+      <text x="160" y="132" font-size="10.8" fill="#555" text-anchor="middle">size=20, prev=0,1,2…（页索引）</text>
+      <text x="160" y="147" font-size="10.8" fill="#555" text-anchor="middle">product_type=0, pvip=0, with_articles=false</text>
+
+      <rect x="20" y="180" width="280" height="56" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="160" y="202" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">② parse_rebuild_index</text>
+      <text x="160" y="220" font-size="11" fill="#555" text-anchor="middle">取 data.products[].id+title</text>
+
+      <rect x="20" y="262" width="180" height="54" rx="9" fill="#e8f0ff" stroke="#1769ff"/>
+      <text x="110" y="284" font-size="12" font-weight="700" fill="#1769ff" text-anchor="middle">③ 边存 by_title</text>
+      <text x="110" y="302" font-size="10.5" fill="#555" text-anchor="middle">每页写一次</text>
+
+      <rect x="240" y="262" width="200" height="54" rx="9" fill="#fdf3e3" stroke="#d98b1f"/>
+      <text x="340" y="282" font-size="11" font-weight="700" fill="#d98b1f" text-anchor="middle">④ 停：more=False</text>
+      <text x="340" y="300" font-size="10.3" fill="#555" text-anchor="middle">或连3页无新增/prev≥60</text>
+
+      <rect x="480" y="262" width="180" height="54" rx="9" fill="#e7f6ee" stroke="#18a058"/>
+      <text x="570" y="282" font-size="11.5" font-weight="700" fill="#18a058" text-anchor="middle">⑤ 落盘 JSON</text>
+      <text x="570" y="300" font-size="10.3" fill="#555" text-anchor="middle">course_index.json 重写</text>
+
+      <line x1="105" y1="62" x2="105" y2="90" stroke="#7c3aed" stroke-width="2" marker-end="url(#ar4)"/>
+      <line x1="160" y1="154" x2="160" y2="178" stroke="#7c3aed" stroke-width="2" marker-end="url(#ar4)"/>
+      <line x1="160" y1="236" x2="110" y2="260" stroke="#1769ff" stroke-width="2" marker-end="url(#ar4b)"/>
+      <line x1="200" y1="289" x2="238" y2="289" stroke="#d98b1f" stroke-width="2" marker-end="url(#ar4b)"/>
+      <line x1="440" y1="289" x2="478" y2="289" stroke="#18a058" stroke-width="2" marker-end="url(#ar4b)"/>
+      <path d="M160 320 C 160 360, 340 360, 340 320" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar4)"/>
+      <text x="250" y="372" font-size="10.5" fill="#7c3aed" text-anchor="middle">prev+1, sleep 3s</text>
+    </svg>
+    <div class="flow-cap">模式④：直接打目录接口翻页，不爬文章内容，目的是重建「课程名↔id」离线映射。</div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>逐请求说明</b></p>
+    <ul>
+      <li><b>① <span class="endpoint">POST serv/v4/pvip/product_list</span></b>：负载 <code>{"tag_ids":[],"product_form":0,"product_type":0,"pvip":0,"prev":0,"size":20,"sort":8,"with_articles":false}</code>。<code>prev</code> 是<b>页索引</b>语义（你浏览器实测的规律），从 0 开始每次 +1。</li>
+      <li><b>② parse_rebuild_index</b>：从响应 <code>data.products</code> 取每项 <code>id</code>（值）+ <code>title</code>（键）。注意取 <code>products</code> 而非 <code>list</code>（<code>list</code> 只有 product_id 没 title）。</li>
+      <li><b>③ 边存</b>：每解析完一页就写入 <code>course_index.json</code> 的 <code>by_title</code>，断点也不丢。</li>
+      <li><b>④ 停止条件</b>（三选一即停）：服务器返回 <code>more=False</code>；连续 3 页「新增为 0」；<code>prev ≥ 60</code>。</li>
+      <li><b>⑤ 落盘</b>：结束时写 <code>{"updated_at":...,"total":N,"by_title":{...}}</code> 覆盖原文件（纯一一对应，无 extra 双字段）。</li>
+      <li>自带 <code>await asyncio.sleep(3)</code> 节流，防限额。Cookie 由 <code>MY_COOKIE</code> 注入，请求带 <code>Referer/Origin/Accept</code> 避 451。</li>
+    </ul>
+    <div class="note" style="margin-bottom:0">当前只扫 <code>product_type=0 + pvip=0</code>，实测得到约 <b>534</b> 门（<code>page.total=560</code> 是跨所有类型的全局数，不是这一组合的真实条数）。要更接近 560+ 需并集 <code>pvip=1</code>/其它类型——会突破当前前提，需另行确认。</div>
+  </div>
+
+  <!-- 通用内容爬取 -->
+  <h3 id="chain-common">通用内容爬取链路（模式 ①/②/③ 拿到课程 id 后共用）</h3>
+  <div class="svgwrap">
+    <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+      <defs>
+        <marker id="arc" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7c3aed"/></marker>
+      </defs>
+      <rect x="20" y="20" width="200" height="52" rx="9" fill="#e7f6ee" stroke="#18a058"/>
+      <text x="120" y="42" font-size="12.5" font-weight="700" fill="#18a058" text-anchor="middle">已得课程 id</text>
+      <text x="120" y="59" font-size="10.5" fill="#555" text-anchor="middle">来自 wanted 列表</text>
+
+      <rect x="20" y="104" width="260" height="58" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="150" y="126" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">① POST serv/v1/column/articles</text>
+      <text x="150" y="144" font-size="11" fill="#555" text-anchor="middle">取该课程的文章列表(标题/id)</text>
+
+      <rect x="20" y="192" width="260" height="56" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="150" y="214" font-size="12" font-weight="700" fill="#555" text-anchor="middle">② 遍历每篇文章</text>
+      <text x="150" y="232" font-size="11" fill="#555" text-anchor="middle">增量跳过判断(本地已存?)</text>
+
+      <rect x="20" y="276" width="200" height="58" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="120" y="298" font-size="12.5" font-weight="700" fill="#0b69c7" text-anchor="middle">③ POST serv/v1/article</text>
+      <text x="120" y="316" font-size="11" fill="#555" text-anchor="middle">取正文 HTML</text>
+
+      <rect x="250" y="276" width="210" height="58" rx="9" fill="#fff" stroke="#7c3aed"/>
+      <text x="355" y="298" font-size="12" font-weight="700" fill="#0b69c7" text-anchor="middle">④ POST serv/v4/comment/list</text>
+      <text x="355" y="316" font-size="11" fill="#555" text-anchor="middle">sort=0 再 sort=1</text>
+
+      <rect x="500" y="276" width="160" height="58" rx="9" fill="#e8f0ff" stroke="#1769ff"/>
+      <text x="580" y="298" font-size="12" font-weight="700" fill="#1769ff" text-anchor="middle">⑤ 落盘 HTML</text>
+      <text x="580" y="316" font-size="10.5" fill="#555" text-anchor="middle">resource/课程/文章.html</text>
+
+      <line x1="120" y1="72" x2="120" y2="102" stroke="#7c3aed" stroke-width="2" marker-end="url(#arc)"/>
+      <line x1="150" y1="162" x2="150" y2="190" stroke="#7c3aed" stroke-width="2" marker-end="url(#arc)"/>
+      <line x1="150" y1="248" x2="120" y2="274" stroke="#7c3aed" stroke-width="2" marker-end="url(#arc)"/>
+      <line x1="220" y1="305" x2="248" y2="305" stroke="#7c3aed" stroke-width="2" marker-end="url(#arc)"/>
+      <line x1="460" y1="305" x2="498" y2="305" stroke="#1769ff" stroke-width="2" marker-end="url(#arc)"/>
+      <text x="490" y="268" font-size="10" fill="#7c3aed" text-anchor="middle">并行</text>
+      <text x="540" y="370" font-size="10.5" fill="#555" text-anchor="middle">③+④ 合并进同一 HTML</text>
+    </svg>
+    <div class="flow-cap">三种爬取模式在「拿到课程 id」之后，都走这条相同的内容链路，把正文和评论存成 HTML。</div>
+  </div>
+  <div class="card">
+    <p style="margin-top:0"><b>逐请求说明</b></p>
+    <ul>
+      <li><b>① <span class="endpoint">POST serv/v1/column/articles</span></b>：负载带课程 <code>id</code>，返回该课所有文章（标题、article_id、是否免费等）。</li>
+      <li><b>② 遍历 + 增量跳过</b>：对每篇文章，检查本地是否已有 <code>&lt;课程&gt;/&lt;文章&gt;.html</code>。已存在且非 <code>force</code> 模式 → 跳过（这就是续爬能力）；不存在 → 继续。</li>
+      <li><b>③ <span class="endpoint">POST serv/v1/article</span></b>：取文章正文，返回 HTML 片段。</li>
+      <li><b>④ <span class="endpoint">POST serv/v4/comment/list</span></b>：取评论，<b>先 <code>sort=0</code>（按热度）再 <code>sort=1</code>（按时间）</b>两次请求合并，覆盖更全。</li>
+      <li><b>⑤ 落盘</b>：正文 + 评论合成一个 HTML，写入 <code>resource/jikeshijian/&lt;课程名&gt;/&lt;文章标题&gt;.html</code>。</li>
+    </ul>
+  </div>
+
+  <!-- ============ 增量 ============ -->
+  <h2 id="incr">五、增量 / 续爬</h2>
+  <div class="card">
+    <ul>
+      <li><b>默认即增量</b>：每篇文章先比对本地已存 HTML，存在就跳过。课程没更完、或上次中断，再跑同一条命令会自动「续上」。</li>
+      <li><b>强制全量重爬</b>：追加 <code>-a force=1</code>，忽略本地已存，全部重新抓取（用于课程大更新或本地文件损坏）。</li>
+      <li><b>结束汇总</b>：爬虫结束时打印本次爬取/跳过/新增数量，一眼确认是「续上了」还是「全量重爬了」。</li>
+    </ul>
+  </div>
+
+  <!-- ============ 排查 ============ -->
+  <h2 id="faq">六、排查表</h2>
+  <table>
+    <tr><th>现象</th><th>原因 / 处理</th></tr>
+    <tr><td>请求返回 <code>451</code></td><td>缺 <code>Referer/Origin/Accept</code> 头（重建模式已内置）；常规爬取由中间件注入，一般不出。</td></tr>
+    <tr><td>请求被区域拦截 / 空响应</td><td>代理没开。确认 <code>127.0.0.1:7897</code> 可用，环境变量里有代理。</td></tr>
+    <tr><td>指定课程被跳过 + WARNING</td><td>课名在 <code>course_index.json</code> 索引里没有。改用 <code>-a course_ids=</code> 直接给 id，或把 id 填进 <code>MY_COURSE_IDS</code>。</td></tr>
+    <tr><td>重建索引不是 560 而是 534</td><td>正常。<code>product_type=0+pvip=0</code> 真实只有 534；<code>page.total=560</code> 是跨所有类型的全局数。</td></tr>
+    <tr><td>增量没续上、全重爬了</td><td>可能加了 <code>-a force=1</code>；或本地 HTML 路径/文件名变了导致比对失败。</td></tr>
+    <tr><td>Cookie 失效（大量 401/空）</td><td>更新 <code>settings.py</code> 的 <code>MY_COOKIE</code>，重建索引同样吃这一处。</td></tr>
+  </table>
+
+  <div class="footer">
+    文档与 <code>jikeshijian/jikeshijian/spiders/jk_article.py</code> 代码逐项核对生成。四种模式共用同一蜘蛛，靠参数/配置切换；重建索引复用项目的 <code>MY_COOKIE</code> 与代理通道。
+  </div>
+</main>
+</div>
+</body>
+</html>

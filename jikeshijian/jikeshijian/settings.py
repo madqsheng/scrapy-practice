@@ -116,16 +116,13 @@ MY_PRODUCT_DATA = {
 }
 
 # 指定课程模式（可选）：只爬这里列出的课程。课名解析改用离线索引
-#   jikeshijian/course_index.json（由 jikeshijian/sync_course_index.py 生成、已提交仓库），
-#   爬虫运行时不再发网络查目录，直接按名→id 离线匹配，稳且不触发限流。
-# - 大部分课名会自动从索引匹配；少数「你写的名字 ≠ 目录规范标题」的课（如
-#   "Claude Code 工程化实战" → 真实 "Claude Code Skill入门实战课"）已在
-#   sync_course_index.py 的 EXTRA 里固化了 id，无需你手改这里的名字。
-# - 若某门课名在索引里确实没有（目录与 EXTRA 都搜不到），爬虫会 WARNING 并跳过；
-#   这种「VIP 可看但 product_list 目录翻不到」的课，把课程页 id 填到下面
-#   MY_COURSE_IDS 即可（或 -a course_ids="..." 临时指定）。
-# - 索引里的课程目录会随时间变化：cookie 有效时执行
-#   python jikeshijian/sync_course_index.py 可重新抓取刷新（约 270+ 门）。
+#   jikeshijian/jikeshijian/course_index.json（课名↔id 一一对应，无 EXTRA / 无双字段），
+#   由第四种模式 `scrapy crawl jk -a rebuild_index=1` 重建（复用本文件 MY_COOKIE）。
+#   爬虫运行时优先离线按名→id 匹配，不发网络查目录，稳且不触发限流。
+# - 课程名必须和索引里的「规范标题」完全一致，否则匹配不到会被 WARNING+跳过；
+#   匹配不到的课，把课程页 id 填到下面 MY_COURSE_IDS（或 -a course_ids="..."）最稳。
+# - 索引里的课程目录会随时间变化：更新 MY_COOKIE 后执行
+#   scrapy crawl jk -a rebuild_index=1 即可重建刷新。
 # - 为空列表时，回退到命令行的 -a limit= / 全部 模式；也可用 -a courses="A,B" 临时指定。
 # 优先级：-a courses  >  -a limit  >  MY_COURSES  >  全部。
 MY_COURSES = ["Harness Agent 脚手架实战课", "AI Agent 系统设计面试现场", 
