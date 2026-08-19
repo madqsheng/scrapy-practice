@@ -157,7 +157,7 @@ class JkArticleSpider(scrapy.Spider):
         yield scrapy.Request(
             url=self.product_url,  # 获取课程
             method='POST',
-            headers={'Referer': 'https://time.geekbang.org/dashboard/course'},
+            headers={'Referer': 'https://time.geekbang.org/'},
             body=json.dumps(self._product_body),
             callback=self.parse_product
         )
@@ -177,7 +177,7 @@ class JkArticleSpider(scrapy.Spider):
             yield scrapy.Request(
                 url=self.product_url,
                 method='POST',
-                headers={'Referer': 'https://time.geekbang.org/dashboard/course'},
+                headers={'Referer': 'https://time.geekbang.org/'},
                 body=json.dumps(self._product_body),
                 callback=self.parse_product
             )

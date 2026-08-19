@@ -136,12 +136,17 @@ class CustomHeadersMiddleware:
         # 设置User-Agent
         if self.user_agents:
             request.headers['User-Agent'] = self.user_agents
-        
+
         # # 设置Referer
         # if self.referers:
         #     request.headers['Referer'] = self.referers
-        
+
         request.headers['Content-Type'] = 'application/json'
+
+        # 极客时间 API 校验来源站：缺 Origin / Accept 时直接 451/400 拒（实测）。
+        # 统一在此补齐，所有请求都带，避免逐个请求漏加导致 400。
+        request.headers['Origin'] = 'https://time.geekbang.org'
+        request.headers['Accept'] = 'application/json, text/plain, */*'
         
         
         
