@@ -99,10 +99,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .lightbox{position:fixed; inset:0; background:rgba(30,30,30,.22); display:flex;
     align-items:center; justify-content:center; z-index:9999; cursor:zoom-out;
     -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); padding:40px 20px;}
-  .lightbox .lb-window{position:relative; max-width:min(860px, 90vw); max-height:100%;
+  .lightbox .lb-window{position:relative; max-width:min(1400px, 94vw); max-height:94vh;
     overflow:auto; border-radius:10px; box-shadow:0 16px 60px rgba(0,0,0,.35);
-    background:transparent; text-align:center;}
-  .lightbox img{max-width:100%; max-height:min(76vh, 80vh); border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.25); background:var(--bg); display:block; margin:0 auto;}
+    background:transparent; text-align:center; padding:8px;}
+  .lightbox img{max-width:100%; max-height:86vh; width:auto; height:auto; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.25); background:var(--bg); display:block; margin:0 auto;}
   .lightbox .lb-caption{margin-top:10px; padding:8px 16px; font-size:14px; color:var(--text);
     background:var(--bg); border-radius:6px; display:inline-block; line-height:1.6;
     box-shadow:0 2px 12px rgba(0,0,0,.1); max-width:100%;}
