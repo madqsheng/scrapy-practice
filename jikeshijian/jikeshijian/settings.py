@@ -60,6 +60,11 @@ ROBOTSTXT_OBEY = False
 #    "scrapy.extensions.telnet.TelnetConsole": None,
 # }
 
+# 把每次爬取日志写入 logs/<BOT_NAME>/<spider>_<时间>.log（同时保留控制台输出）
+EXTENSIONS = {
+    "jikeshijian.logging_ext.SpiderLogFileExtension": 100,
+}
+
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 # ITEM_PIPELINES = {

@@ -75,8 +75,9 @@
   <a class="sub" href="#chain-rebuild">④ 重建索引链路</a>
   <a class="sub" href="#chain-common">通用内容爬取链路</a>
   <a href="#incr">增量 / 续爬</a>
+  <a class="sub" href="#incr-template-fix">模板改动如何刷新存量</a>
   <a href="#faq">排查表</a>
-  <div class="ver">jk spider · 离线索引 534 门<br>最后更新见文件实际内容</div>
+  <div class="ver">jk spider · 离线索引 534 门<br>最后更新 2026-08-19</div>
 </nav>
 
 <main>
@@ -414,6 +415,24 @@ scrapy crawl jk -a course_ids="101170001,101128701"</code></pre>
     </ul>
   </div>
 
+  <div class="note"><b>关键误区</b>：<code>scrapy crawl jk</code> 是增量模式，但<b>增量 =「本地有就跳过」</b>，不是「检查并自动更新」。跳过判断在抓取文章<b>之前</b>就发生（<code>jk_article.py</code> 里 <code>os.path.exists</code> 命中即 <code>continue</code>），命中后连服务器请求都不发，更不会进 pipeline 重新渲染。所以<b>改了 <code>pipelines.py</code> 的 HTML 模板 / JS 后，已存文件不会自动刷新</b>——必须主动触发重渲。</div>
+
+  <h3 id="incr-template-fix">改模板 / JS 后，如何让存量文章吃到更新</h3>
+  <p class="muted">阅读页体验（图片灯箱、图注、评论「最新/精选」切换等）都写在 <code>pipelines.py</code> 的模板里。<b>模板只在文章被重新渲染时生成新 HTML</b>；增量模式把已存文章全跳过，新模板没机会跑。想让已落盘的文章也恢复这些交互，必须让它「重新渲染」——即加 <code>-a force=1</code> 关掉跳过逻辑。</p>
+  <div class="card">
+    <p style="margin-top:0"><b>两种等价命令</b></p>
+    <table>
+      <tr><th>命令</th><th>重渲范围</th><th>请求量 / 风险</th></tr>
+      <tr><td><code>scrapy crawl jk -a force=1</code></td><td><code>MY_COURSES</code> 配置的那批（当前 12 门）</td><td>大，易撞 452 限流</td></tr>
+      <tr><td><code>scrapy crawl jk -a courses="A,B" -a force=1</code></td><td>只重渲点名的几门</td><td>小，更安全</td></tr>
+    </table>
+    <ul>
+      <li><b>前提</b>：<code>force=1</code> 是真去服务器重新拉文章，需要 <code>settings.MY_COOKIE</code> 为<b>最新有效</b> cookie + 代理开着，否则会 451/452 失败。</li>
+      <li><b>范围建议</b>：先用 <code>-a courses="..."</code> 只挑「确实有图片/图注/评论」的课来强刷，范围最小、最不易触发限额；确认没问题再决定是否全量。</li>
+      <li><b>一句话区分</b>：不加 <code>force</code> → 只补「缺失」文章；加 <code>force=1</code> → 重渲「已存」文章。要让模板修复落到存量文件，就必须加 <code>force</code>。</li>
+    </ul>
+  </div>
+
   <!-- ============ 排查 ============ -->
   <h2 id="faq">六、排查表</h2>
   <table>
@@ -423,6 +442,7 @@ scrapy crawl jk -a course_ids="101170001,101128701"</code></pre>
     <tr><td>指定课程被跳过 + WARNING</td><td>课名在 <code>course_index.json</code> 索引里没有。改用 <code>-a course_ids=</code> 直接给 id，或把 id 填进 <code>MY_COURSE_IDS</code>。</td></tr>
     <tr><td>重建索引不是 560 而是 534</td><td>正常。<code>product_type=0+pvip=0</code> 真实只有 534；<code>page.total=560</code> 是跨所有类型的全局数。</td></tr>
     <tr><td>增量没续上、全重爬了</td><td>可能加了 <code>-a force=1</code>；或本地 HTML 路径/文件名变了导致比对失败。</td></tr>
+    <tr><td>改了 <code>pipelines.py</code> 模板，已存 HTML 没变</td><td>增量模式跳过了已存文件。要让模板修复落到存量，加 <code>-a force=1</code>（建议配合 <code>-a courses=</code> 缩小范围）。</td></tr>
     <tr><td>Cookie 失效（大量 401/空）</td><td>更新 <code>settings.py</code> 的 <code>MY_COOKIE</code>，重建索引同样吃这一处。</td></tr>
   </table>
 

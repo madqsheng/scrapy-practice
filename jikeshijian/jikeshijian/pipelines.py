@@ -96,11 +96,17 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .content figure.fig{margin:1.6em 0; text-align:center;}
   .content figure.fig img{margin:0 auto;}
   .content figcaption{margin-top:8px; font-size:13px; color:var(--muted); line-height:1.5;}
-  .lightbox{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
+  .lightbox{position:fixed; inset:0; background:rgba(30,30,30,.22); display:flex;
     align-items:center; justify-content:center; z-index:9999; cursor:zoom-out;
-    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);}
-  .lightbox img{max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 8px 40px rgba(0,0,0,.5); background:var(--bg); padding:4px;}
-  .lightbox .lb-close{position:absolute; top:18px; right:26px; color:#fff; font-size:34px; line-height:1;}
+    -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); padding:40px 20px;}
+  .lightbox .lb-window{position:relative; max-width:min(860px, 90vw); max-height:100%;
+    overflow:auto; border-radius:10px; box-shadow:0 16px 60px rgba(0,0,0,.35);
+    background:transparent; text-align:center;}
+  .lightbox img{max-width:100%; max-height:min(76vh, 80vh); border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.25); background:var(--bg); display:block; margin:0 auto;}
+  .lightbox .lb-caption{margin-top:10px; padding:8px 16px; font-size:14px; color:var(--text);
+    background:var(--bg); border-radius:6px; display:inline-block; line-height:1.6;
+    box-shadow:0 2px 12px rgba(0,0,0,.1); max-width:100%;}
+  .lightbox .lb-close{position:fixed; top:10px; right:18px; color:#fff; font-size:34px; line-height:1; text-shadow:0 1px 4px rgba(0,0,0,.4);}
   /* 评论区 */
   .comments-section{margin-top:56px; padding-top:28px; border-top:1px solid var(--border);}
   .comments-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
@@ -154,6 +160,7 @@ __COMMENTS__
   function enhanceCode(pre){
     var code = pre.querySelector('code');
     if(!code) return;
+    var rawText = code.textContent;  // 复制用：注入行号前的纯净代码（含原始缩进与换行，无行号）
     if(window.hljs){ try{ window.hljs.highlightElement(code); }catch(e){} }
     var html = code.innerHTML;
     var lines = html.split(String.fromCharCode(10));
@@ -169,32 +176,50 @@ __COMMENTS__
     var ls=document.createElement('span'); ls.className='codelang'; ls.textContent=lang;
     var btn=document.createElement('button'); btn.className='copybtn'; btn.type='button'; btn.textContent='复制';
     btn.addEventListener('click', function(){
-      navigator.clipboard.writeText(code.textContent).then(function(){
+      navigator.clipboard.writeText(rawText).then(function(){
         btn.textContent='已复制'; setTimeout(function(){btn.textContent='复制';},1500);
       }, function(){ btn.textContent='复制失败'; setTimeout(function(){btn.textContent='复制';},1500); });
     });
     bar.appendChild(ls); bar.appendChild(btn); box.insertBefore(bar, pre);
   }
-  function openLightbox(src, alt){
+  function openLightbox(src, caption){
     var ov=document.createElement('div'); ov.className='lightbox';
-    var im=document.createElement('img'); im.src=src; im.alt=alt;
+    var win=document.createElement('div'); win.className='lb-window';
+    var im=document.createElement('img'); im.src=src; im.alt=caption||'';
+    win.appendChild(im);
+    if(caption){
+      var cap=document.createElement('div'); cap.className='lb-caption';
+      cap.textContent=caption; win.appendChild(cap);
+    }
     var c=document.createElement('div'); c.className='lb-close'; c.textContent='×';
-    ov.appendChild(im); ov.appendChild(c);
-    ov.addEventListener('click', function(){ if(ov.parentNode) ov.parentNode.removeChild(ov); });
+    ov.appendChild(win); ov.appendChild(c);
+    function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', keyClose); }
+    function keyClose(e){ if(e.key==='Escape') close(); }
+    ov.addEventListener('click', function(e){ if(e.target===ov || e.target===c) close(); });
+    document.addEventListener('keydown', keyClose);
     document.body.appendChild(ov);
   }
   function enhanceImg(img){
-    var fig=document.createElement('figure'); fig.className='fig';
-    img.parentNode.insertBefore(fig, img); fig.appendChild(img);
-    var cap=img.getAttribute('title')||img.getAttribute('alt')||'';
-    if(cap){
-      var fc=document.createElement('figcaption');
-      // 极客图注里用 <br> 分隔多行，这里转成真实换行显示
-      fc.textContent = cap.replace(/<br\\s*\\/?>/gi, '\n');
-      fc.style.whiteSpace = 'pre-line';
-      fig.appendChild(fc);
+    if(img.closest && img.closest('figure.fig')) return;
+    var cap = img.getAttribute('title') || img.getAttribute('alt') || '';
+    var parentFig = img.closest ? img.closest('figure') : null;
+    if(parentFig && !parentFig.classList.contains('fig')){
+      parentFig.classList.add('fig');
+      var existingCaption = parentFig.querySelector('figcaption');
+      if(existingCaption && !cap) cap = existingCaption.textContent || existingCaption.innerText || '';
     }
-    img.addEventListener('click', function(){ openLightbox(img.getAttribute('src'), img.getAttribute('alt')||''); });
+    if(!parentFig){
+      var fig=document.createElement('figure'); fig.className='fig';
+      img.parentNode.insertBefore(fig, img); fig.appendChild(img);
+      if(cap){
+        var fc=document.createElement('figcaption');
+        // 极客图注里用 <br> 或 [br] 分隔多行，转成真实换行显示
+        fc.textContent = cap.replace(/<br\\s*\\/?>|\\[br\\]/gi, String.fromCharCode(10));
+        fc.style.whiteSpace = 'pre-line';
+        fig.appendChild(fc);
+      }
+    }
+    img.addEventListener('click', function(e){ e.stopPropagation(); openLightbox(img.getAttribute('src'), cap); });
   }
   var pres=document.querySelectorAll('.content pre');
   for(var i=0;i<pres.length;i++) enhanceCode(pres[i]);
@@ -221,8 +246,26 @@ __COMMENTS__
 
 
 def _safe_filename(name):
-    """文件名里不能出现 Windows 非法字符，做最小替换；同时避免和原标题符号撞车。"""
-    return name.replace(':', '：').replace('|', '丨').replace('?', '？')
+    """文件名里不能出现 Windows 非法字符，做最小替换；同时避免和原标题符号撞车。
+
+    Windows 保留字符: \\ / : * ? " < > |
+    用对应的全角字符替换，既保留可读性，又避免和原标题里的符号混淆。
+    spider 与本模块共用此函数，改这里两边同步生效。
+    """
+    repl = {
+        '\\': '＼',   # 全角反斜杠
+        '/': '／',    # 全角斜杠（标题里 I/O、Llama2/ChatGLM、/Command 等会触发幽灵目录）
+        ':': '：',
+        '*': '＊',
+        '?': '？',
+        '"': '＂',    # 全角双引号
+        '<': '＜',
+        '>': '＞',
+        '|': '丨',
+    }
+    for bad, good in repl.items():
+        name = name.replace(bad, good)
+    return name
 
 
 _ICON_COMMENT = '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
@@ -342,7 +385,7 @@ def _render_comments(comments_data, comments_essence=None):
     return (
         '<section class="comments-section">'
         '  <div class="comments-header">'
-        '    <div class="comments-title">全部留言({})</div>'
+        '    <div class="comments-title">全部留言(__TOTAL__)</div>'
         '    <div class="comments-tabs">'
         '      <span class="tab active" data-tab="latest">最新</span>'
         '      <span class="tab" data-tab="essence">精选</span>'
@@ -355,7 +398,7 @@ def _render_comments(comments_data, comments_essence=None):
         + essence_html +
         '  </div>'
         '</section>'
-    ).format(total)
+    ).replace('__TOTAL__', str(total))
 
 
 def _render_html(course_name, title, body_html, audio_rel_path=None, comments_html=''):
