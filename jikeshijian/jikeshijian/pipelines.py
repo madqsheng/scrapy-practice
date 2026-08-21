@@ -13,7 +13,8 @@ from datetime import datetime
 import requests
 import scrapy
 
-from jikeshijian.items import ArticleItem, CourseItem
+from jikeshijian.items import ArticleItem, CourseItem, VideoItem
+from jikeshijian.vod_helper import download_and_mux, ffmpeg_available
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .audio{margin:0 0 28px; padding:14px 0; border-bottom:1px solid var(--border);}
   .audio h3{font-size:14px; color:var(--muted); margin:0 0 10px; font-weight:600;}
   .audio audio{width:100%;}
+  .video{margin:0 0 28px; padding:14px 0; border-bottom:1px solid var(--border);}
+  .video h3{font-size:14px; color:var(--muted); margin:0 0 10px; font-weight:600;}
+  .video video{width:100%; background:#000;}
   /* 代码块增强：容器 + 头部栏（语言 + 复制） */
   .codebox{border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:1.5em 0; background:var(--code-bg);}
   .codebar{display:flex; justify-content:space-between; align-items:center; padding:6px 12px;
@@ -149,6 +153,7 @@ window.MathJax = {
     <h1 class="title">__TITLE__</h1>
   </header>
 __AUDIO__
+__VIDEO__
   <div class="content">
 __BODY__
   </div>
@@ -401,7 +406,7 @@ def _render_comments(comments_data, comments_essence=None):
     ).replace('__TOTAL__', str(total))
 
 
-def _render_html(course_name, title, body_html, audio_rel_path=None, comments_html=''):
+def _render_html(course_name, title, body_html, audio_rel_path=None, video_rel_path=None, comments_html=''):
     audio_block = ""
     if audio_rel_path:
         audio_block = (
@@ -410,11 +415,20 @@ def _render_html(course_name, title, body_html, audio_rel_path=None, comments_ht
             f'  <audio controls preload="none" src="{audio_rel_path}"></audio>\n'
             '</div>'
         )
+    video_block = ""
+    if video_rel_path:
+        video_block = (
+            '<div class="video">\n'
+            '  <h3>视频</h3>\n'
+            f'  <video controls preload="none" src="{video_rel_path}"></video>\n'
+            '</div>'
+        )
     return (_HTML_TEMPLATE
             .replace("__COURSE__", course_name or "")
             .replace("__TITLE__", title or "")
             .replace("__BODY__", body_html or "")
             .replace("__AUDIO__", audio_block)
+            .replace("__VIDEO__", video_block)
             .replace("__COMMENTS__", comments_html))
 
 
@@ -460,6 +474,11 @@ class ArticlePipeline:
 
     # 解析item里的内容
     def process_item(self, item):
+        # 视频 item：下载 m3u8 + 用明文密钥解密合并为 mp4（离线可看）
+        if isinstance(item, VideoItem):
+            self._process_video(item)
+            return item
+
         # 判断数据结构
         if isinstance(item, ArticleItem):
             course_name = _safe_filename(item['course_name'])
@@ -487,13 +506,51 @@ class ArticlePipeline:
                     logger.error("Failed to download audio from %s: %s",
                                  item['article_audio_url'], exc)
 
+            # 视频课文章：HTML 里嵌入 <video> 指向「视频/<标题>.mp4」，mp4 由 VideoItem 异步下载到同一路径
+            video_rel = None
+            if item.get('article_video_id'):
+                video_rel = f'视频/{article_title}.mp4'
+
             # 文章正文本身就是富文本 HTML，直接包成阅读页（保留原网页的图片/代码排版）
             comments_html = _render_comments(item.get('comments'), item.get('comments_essence'))
             file_path = os.path.join(self.file_dir, course_name, f'{article_title}.html')
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             html = _render_html(item['course_name'], item['article_title'],
                                 item['article_content'], audio_rel_path=audio_rel,
+                                video_rel_path=video_rel,
                                 comments_html=comments_html)
             with open(file_path, 'w+', encoding='utf-8') as f:
                 f.write(html)
         return item
+
+    def _process_video(self, item):
+        """把 VideoItem 用真实播放器（Chrome）解密抓取并合并为 mp4。
+
+        极客时间视频课是阿里云 AliyunVoDEncryption 私有加密（TS 包级加密，ffmpeg 标准
+        HLS 解密无效），唯一可靠解路径是让 Aliplayer 在 Chrome 里播放，截获其交给 MSE
+        的解密后 fMP4 再合并。
+        """
+        course_name = _safe_filename(item['course_name'])
+        article_title = _safe_filename(item['article_title'])
+        if not ffmpeg_available():
+            logger.error(
+                "【视频未下载】找不到 ffmpeg（PATH 无、常见目录也未发现），无法把 %s/%s 的视频合并为 mp4。"
+                "可用环境变量 FFMPEG_BIN 指定其绝对路径，或把 ffmpeg 加入 PATH 后重跑"
+                "（scrapy crawl jk -a courses=课程名 -a force=1）。",
+                item['course_name'], item['article_title'])
+            return
+        if not item.get('play_auth') and not item.get('m3u8_url'):
+            logger.error("【视频未下载】%s/%s 缺少播放凭证", item['course_name'], item['article_title'])
+            return
+        video_dir = os.path.join(self.file_dir, course_name, '视频')
+        os.makedirs(video_dir, exist_ok=True)
+        out_mp4 = os.path.join(video_dir, f'{article_title}.mp4')
+        if os.path.exists(out_mp4) and os.path.getsize(out_mp4) > 0:
+            logger.info("视频已存在，跳过：%s/%s", item['course_name'], item['article_title'])
+            return
+        from jikeshijian.vod_grabber import grab_mp4
+        ok, msg = grab_mp4(item.get('play_auth'), item['video_id'], out_mp4)
+        if ok:
+            logger.info("视频下载完成：%s/%s -> %s", item['course_name'], item['article_title'], out_mp4)
+        else:
+            logger.error("【视频下载失败】%s/%s：%s", item['course_name'], item['article_title'], msg)

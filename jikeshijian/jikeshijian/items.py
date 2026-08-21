@@ -22,3 +22,14 @@ class ArticleItem(scrapy.Item):
     course_name = scrapy.Field()
     comments = scrapy.Field()           # /serv/v4/comment/list 评论（最新，sort=0）
     comments_essence = scrapy.Field()   # 同一接口评论（精选，sort=1）
+    article_video_id = scrapy.Field()   # 视频课文章的 video_id（文本/音频课为空）
+
+# 视频数据结构：由 spider 调 video_play_auth + GetPlayInfo 取得播放地址后，
+# 交给 ArticlePipeline 用真实播放器（Chrome）解密抓取并合并为 mp4（离线可看）。
+class VideoItem(scrapy.Item):
+    course_name = scrapy.Field()
+    article_title = scrapy.Field()
+    video_id = scrapy.Field()
+    m3u8_url = scrapy.Field()           # GetPlayInfo 返回的 m3u8 播放地址（备用）
+    play_auth = scrapy.Field()          # video_play_auth 返回的 play_auth（base64 JSON）
+    plaintext = scrapy.Field()          # GetPlayInfo 返回的 Plaintext（保留备用）

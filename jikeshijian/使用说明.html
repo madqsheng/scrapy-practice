@@ -108,6 +108,7 @@
     <li><b>代理</b>：翻页请求走系统/环境变量里的代理（默认 <code>127.0.0.1:7897</code>）。爬之前确认代理开着，否则请求会因区域被拦。</li>
     <li><b>节流</b>：默认每门课程之间 <code>SLEEP_BETWEEN=2s</code>；重建索引模式每页 <code>3s</code>。不要在代理不稳时拉高并发。</li>
     <li><b>落盘位置</b>：<code>jikeshijian/resource/jikeshijian/&lt;课程名&gt;/&lt;文章标题&gt;.html</code></li>
+    <li><b>ffmpeg（视频课必需）</b>：爬<b>视频课</b>（如《AI Agent智能体实战课》《DeepSeek Harness 极简入门》）时，爬虫会走 <code>video_play_auth → GetPlayInfo</code> 拿到阿里云加密 HLS（m3u8），再用 <b>ffmpeg</b> 把分片解密合并成离线可看的 <code>mp4</code>。代码会<b>自动定位</b> ffmpeg：优先 <code>PATH</code> → 环境变量 <code>FFMPEG_BIN</code> → 常见自带目录（剪映 JianyingPro、Krita、conda 等，版本无关通配）。多数机器（装过剪映/Krita）其实已经有真 ffmpeg，<b>不用专门安装</b>；实在找不到时，可设 <code>FFMPEG_BIN</code> 指向其绝对路径，或把 ffmpeg 加入 <code>PATH</code>。注意：<code>pip install ffmpeg</code> 装的是空壳封装、<b>不含真二进制</b>，没用。<b>GetPlayInfo 请求走的是 <code>vod.cn-shanghai.aliyuncs.com</code>，已被 spider 的 <code>allowed_domains</code> 放行</b>；若自行改代码务必别漏掉这个域名，否则视频链路会被离站中间件静默丢弃。</li>
   </ul>
 
   <!-- ============ 命令 ============ -->
@@ -444,6 +445,8 @@ scrapy crawl jk -a course_ids="101170001,101128701"</code></pre>
     <tr><td>增量没续上、全重爬了</td><td>可能加了 <code>-a force=1</code>；或本地 HTML 路径/文件名变了导致比对失败。</td></tr>
     <tr><td>改了 <code>pipelines.py</code> 模板，已存 HTML 没变</td><td>增量模式跳过了已存文件。要让模板修复落到存量，加 <code>-a force=1</code>（建议配合 <code>-a courses=</code> 缩小范围）。</td></tr>
     <tr><td>Cookie 失效（大量 401/空）</td><td>更新 <code>settings.py</code> 的 <code>MY_COOKIE</code>，重建索引同样吃这一处。</td></tr>
+    <tr><td>视频课文章生成了，但点开没有视频 / 视频打不开</td><td>多半是没装 <code>ffmpeg</code>，或当初是<b>增量跳过</b>没触发视频下载。装好 ffmpeg 后，对该课加 <code>-a force=1</code> 重跑一次即可补下 mp4（HTML 里已预留 <code>视频/&lt;标题&gt;.mp4</code> 引用）。</td></tr>
+    <tr><td>视频下载报错 / 日志提示「视频下载失败」</td><td>阿里云 STS 令牌约 4 分钟过期，<code>video_play_auth → GetPlayInfo → 下载</code> 必须在同一次爬取内连完（代码已保证）；失败多为网络/代理或 <code>ffmpeg</code> 缺失，看具体报错。</td></tr>
   </table>
 
   <div class="footer">

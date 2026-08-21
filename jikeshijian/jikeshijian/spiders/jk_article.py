@@ -17,7 +17,7 @@ _INDEX_PATH = Path(__file__).resolve().parent.parent / 'course_index.json'
 
 class JkArticleSpider(scrapy.Spider):
     name = "jk"
-    allowed_domains = ["time.geekbang.org"]
+    allowed_domains = ["time.geekbang.org", "aliyuncs.com"]
     start_urls = ["http://time.geekbang.org/"]
 
     # 我的课程：返回课程id
@@ -31,6 +31,9 @@ class JkArticleSpider(scrapy.Spider):
 
     # 文章评论区
     comment_url = "https://time.geekbang.org/serv/v4/comment/list"
+
+    # 视频课鉴权：返回 play_auth（base64 JSON，内含 STS 临时凭证），用于换取阿里云 VOD 播放地址
+    video_play_auth_url = "https://time.geekbang.org/serv/v3/source_auth/video_play_auth"
 
     # 全站课程目录（含 VIP 可访问但未单买的课程），用于按名解析课程 id
     product_list_url = "https://time.geekbang.org/serv/v4/pvip/product_list"
@@ -496,37 +499,52 @@ class JkArticleSpider(scrapy.Spider):
             course_name = response.meta['course_name']
             article_id = article['id']
             article_title = article['article_title']
+            # 视频课文章列表里带 video_id（文本/音频课为空）；用它判断该篇是否为视频。
+            video_id = str(article.get('video_id') or '').strip()
 
-            # —— 增量/续爬：本地已存该文章 html 且未强制重爬，则跳过（不重写、不浪费请求）——
+            # —— 增量/续爬：本地已存该文章 html 且未强制重爬，则跳过正文请求（不重写、不浪费请求）——
             # 命名规则与 pipeline 完全一致（_safe_filename），目录结构 <课程名>/<文章标题>.html。
+            html_exists = False
             if not self.force and file_dir:
                 existing = os.path.join(
                     file_dir,
                     _safe_filename(course_name),
                     _safe_filename(article_title) + '.html',
                 )
-                if os.path.exists(existing):
+                html_exists = os.path.exists(existing)
+                if html_exists:
                     self._skipped_count += 1
-                    self.logger.debug("已存在，跳过（增量）：%s/%s", course_name, article_title)
-                    continue
+                    self.logger.debug("已存在，跳过正文（增量）：%s/%s", course_name, article_title)
 
-            self._fetched_count += 1
-            self.settings['ARTICLE_DATA']['id'] = str(article_id)
-            Referer = 'https://time.geekbang.org/column/article/{}'.format(
-                article_id)
-            yield scrapy.Request(
-                url=self.article_url,  # 获取课程里的文章
-                method='POST',
-                headers={'Referer': Referer},
-                body=json.dumps(self.settings['ARTICLE_DATA']),  # 表单数据，以字典形式提供
-                callback=self.parse_article,
-                meta={
-                    'course_id': course_id,
-                    'course_name': course_name,
-                    'article_id': article_id,
-                    'article_title': article_title
-                }
-            )
+            if not html_exists:
+                self._fetched_count += 1
+                self.settings['ARTICLE_DATA']['id'] = str(article_id)
+                Referer = 'https://time.geekbang.org/column/article/{}'.format(
+                    article_id)
+                yield scrapy.Request(
+                    url=self.article_url,  # 获取课程里的文章
+                    method='POST',
+                    headers={'Referer': Referer},
+                    body=json.dumps(self.settings['ARTICLE_DATA']),  # 表单数据，以字典形式提供
+                    callback=self.parse_article,
+                    meta={
+                        'course_id': course_id,
+                        'course_name': course_name,
+                        'article_id': article_id,
+                        'article_title': article_title,
+                        'video_id': video_id,
+                    }
+                )
+            elif video_id:
+                # 正文已存在但视频 mp4 缺失时，仍补抓视频（增量不会因 html 存在而漏掉视频）。
+                mp4_path = os.path.join(
+                    file_dir, _safe_filename(course_name), '视频',
+                    _safe_filename(article_title) + '.mp4',
+                )
+                if not os.path.exists(mp4_path):
+                    yield from self._schedule_video(video_id, article_id, course_name, article_title)
+                else:
+                    self.logger.debug("视频已存在，跳过：%s/%s", course_name, article_title)
 
     def parse_article(self, response):
         meta = response.meta
@@ -542,11 +560,20 @@ class JkArticleSpider(scrapy.Spider):
         item['article_title'] = meta['article_title']
         item['article_content'] = article['article_content']
         item['article_audio_url'] = article['audio_download_url']
+        item['article_video_id'] = meta.get('video_id') or ''
         item['comments'] = None
         item['comments_essence'] = None
 
         Referer = 'https://time.geekbang.org/column/article/{}'.format(
             meta['article_id'])
+
+        # 视频课文章：正文照常落盘，同时另起一条链路去取真实 mp4（video_play_auth -> GetPlayInfo -> 下载合并）。
+        # 视频下载不阻塞正文，走独立 VideoItem，由 pipeline 完成。
+        if item['article_video_id']:
+            yield from self._schedule_video(
+                item['article_video_id'], meta['article_id'],
+                meta['course_name'], meta['article_title'],
+            )
 
         # 先取「最新」（sort=0），成功后再取「精选」（sort=1）
         yield scrapy.Request(
@@ -558,6 +585,118 @@ class JkArticleSpider(scrapy.Spider):
             errback=self.parse_comments_err,
             meta={'item': item, 'sort': 0, 'referer': Referer}
         )
+
+    # --------------------------------------------------------------------------- #
+    # 视频课链路：video_play_auth -> GetPlayInfo -> VideoItem（下载合并在 pipeline）
+    # --------------------------------------------------------------------------- #
+    def _schedule_video(self, video_id, article_id, course_name, article_title):
+        """发起 video_play_auth 请求（POST），成功后由 parse_video_play_auth 继续换取播放地址。"""
+        Referer = 'https://time.geekbang.org/course/article/{}'.format(article_id)
+        yield scrapy.Request(
+            url=self.video_play_auth_url,
+            method='POST',
+            headers={'Referer': Referer},
+            body=json.dumps({"source_type": 1, "aid": int(article_id), "video_id": video_id}),
+            callback=self.parse_video_play_auth,
+            meta={
+                'course_name': course_name,
+                'article_title': article_title,
+                'article_id': article_id,
+                'video_id': video_id,
+            }
+        )
+
+    def parse_video_play_auth(self, response):
+        """video_play_auth(POST) 成功 -> 用 play_auth 拼出 GetPlayInfo 并直接取播放地址。
+
+        关键：GetPlayInfo 用 requests 直接发，不走 Scrapy.Request。
+        原因：Scrapy 会对已百分号编码的 URL 二次编码（%2B -> %252B），
+        阿里云解码出乱码参数 -> 签名校验失败 -> 400。requests 会原样发送我们签名好的 URL。
+        """
+        meta = response.meta
+        article_id = meta['article_id']
+        try:
+            data = json.loads(response.text)
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error("video_play_auth 响应非 JSON（文章 %s）：%s", article_id, exc)
+            return
+        d = data.get('data')
+        play_auth = d.get('play_auth') if isinstance(d, dict) else None
+        if not play_auth:
+            self.logger.error("video_play_auth 未返回 play_auth（文章 %s）", article_id)
+            return
+
+        from jikeshijian.vod_helper import parse_play_auth, build_get_play_info_url
+        from jikeshijian.items import VideoItem
+        import requests as _req
+
+        try:
+            pa = parse_play_auth(play_auth)
+            url = build_get_play_info_url(pa, meta['video_id'])
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error("解析 play_auth / 构造 GetPlayInfo 失败（文章 %s）：%s",
+                              article_id, exc)
+            return
+
+        Referer = 'https://time.geekbang.org/course/article/{}'.format(article_id)
+        try:
+            r = _req.get(url, headers={'Referer': Referer}, timeout=30)
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error("GetPlayInfo 请求异常（文章 %s，video_id=%s）：%s",
+                              article_id, meta['video_id'], exc)
+            return
+        if r.status_code != 200:
+            self.logger.error("GetPlayInfo 返回 %s（文章 %s）：%s",
+                              r.status_code, article_id, r.text[:800])
+            return
+        try:
+            j = r.json()
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error("GetPlayInfo 响应非 JSON（文章 %s）：%s", article_id, exc)
+            return
+
+        # 阿里云 VOD 原样返回时无 data 层（顶层即 VideoBase/PlayInfoList/RequestId）；
+        # 若未来 geekbang 套了包装则兼容 j['data']。
+        root = j.get('data') or j
+        m3u8_url = None
+        play_list = (root.get('PlayInfoList') or {}).get('PlayInfo') or []
+        for info in play_list:
+            if str(info.get('Format', '')).lower() == 'm3u8' or \
+               str(info.get('PlayURL', '')).endswith('.m3u8'):
+                m3u8_url = info.get('PlayURL')
+                break
+        if not m3u8_url:
+            m3u8_url = self._find_key(root, 'PlayURL')
+        if not m3u8_url:
+            self.logger.error("GetPlayInfo 未返回 m3u8 地址（文章 %s）", article_id)
+            return
+        plaintext = self._find_key(root, 'Plaintext')
+
+        item = VideoItem()
+        item['course_name'] = meta['course_name']
+        item['article_title'] = meta['article_title']
+        item['video_id'] = meta['video_id']
+        item['m3u8_url'] = m3u8_url
+        item['play_auth'] = play_auth   # 交给 pipeline 用真实播放器解密抓取
+        item['plaintext'] = plaintext
+        yield item
+
+    @staticmethod
+    def _find_key(node, key):
+        """在 GetPlayInfo 的嵌套返回里递归找第一个非空 key（兼容不同字段位置）。"""
+        if isinstance(node, dict):
+            if key in node and node[key]:
+                return node[key]
+            for v in node.values():
+                r = JkArticleSpider._find_key(v, key)
+                if r:
+                    return r
+        elif isinstance(node, list):
+            for v in node:
+                r = JkArticleSpider._find_key(v, key)
+                if r:
+                    return r
+        return None
 
     def parse_comments(self, response):
         meta = response.meta
